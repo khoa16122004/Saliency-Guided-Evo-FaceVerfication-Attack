@@ -62,7 +62,7 @@ if __name__ == "__main__":
     results = []
    
     if args.label == 0:
-        start = 10
+        start = 0
     else:
         start = 300
 
