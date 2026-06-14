@@ -1,5 +1,5 @@
 # dataset
-wget 1sGtnHX3UYkg47lktNmz8dyQ8iu1hx_Ow
+gdown 1sGtnHX3UYkg47lktNmz8dyQ8iu1hx_Ow
 unzip lfw_preprocess.zip
 rm lfw_preprocess.zip
 
