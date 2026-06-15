@@ -121,7 +121,6 @@ if __name__ == "__main__":
         if args.baseline == 'GA_sequence':
                 P, adv_img, adv_score, pnsr_score = algo.solve_sequential()
         elif args.baseline == 'GA':
-                print("Using GA")
                 P, adv_img, adv_score, pnsr_score, full_P = algo.solve()
 
         elif args.baseline == 'GA_flag':
@@ -142,8 +141,9 @@ if __name__ == "__main__":
         #     "adv_score": adv_score,
         #     "pnsr_score": pnsr_score})
         
+        
         result = {
-                "Population": P,
+                # "Population": P,
                 "adv_img": adv_img,
                 "adv_score": adv_score,
                 "pnsr_score": pnsr_score,

@@ -53,6 +53,7 @@ class GA:
             O_P.extend(self.pop.P)            
             P_final = []
             for i in range(2):
+                # shuffle 2 lần nên lưu ra 2 x iterations
                 random.shuffle(O_P)
                 P_ = self.tourament_selection(O_P)
                 P_final.extend(P_)
