@@ -77,14 +77,13 @@ if __name__ == "__main__":
         
         random.seed(args.seed)
         img1, img2, label = DATA[i]
-        print("Label: ", label)
         img1, img2 = img1.resize((160, 160)), img2.resize((160, 160))
         
         img1_torch, img2_torch = toTensor(img1), toTensor(img2)
         img1_feature = MODEL(img1_torch.unsqueeze(0).cuda())
         img2_feature = MODEL(img2_torch.unsqueeze(0).cuda())
         sims = F.cosine_similarity(img1_feature, img2_feature, dim=1)
-        print("Similarity: ", sims.item())
+        # print("Similarity: ", sims.item())
 
         fitness = Fitness(patch_size=args.patch_size,
                         img1=img1_torch, img2=img2_torch,
