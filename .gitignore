@@ -218,4 +218,5 @@ __marimo__/
 .streamlit/secrets.toml
 
 src/pretrained_model/*.pt
+src/output
 lfw_preprocess

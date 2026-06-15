@@ -17,8 +17,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Genetic Algorithm for Image Patch Manipulation")
     parser.add_argument('--pop_size', type=int, default=100, help="Population size")
     parser.add_argument('--patch_size', type=int, default=16, help="Size of the patch")
-    parser.add_argument('--prob_mutate_location', type=float, default=0.5, help="Probability of mutating the patch location")
-    parser.add_argument('--prob_mutate_patch', type=float, default=0.8, help="Probability of mutating the patch itself")
+    parser.add_argument('--prob_mutate_location', type=float, default=0.2, help="Probability of mutating the patch location")
+    parser.add_argument('--prob_mutate_patch', type=float, default=0.9, help="Probability of mutating the patch itself")
     parser.add_argument('--n_iter', type=int, default=1000, help="Number of iterations for the genetic algorithm")
     parser.add_argument('--tourament_size', type=int, default=4, help="Tournament size for selection")
     parser.add_argument('--recons_w', type=float, default=0.5, help="Weight for reconstruction fitness")
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         
         result = {
                 # "Population": P,
-                "adv_img": adv_img,
+                # "adv_img": adv_img,
                 "adv_score": adv_score,
                 "pnsr_score": pnsr_score,
                 "best_psnr_success": best_psnr_success,
