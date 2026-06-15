@@ -1,4 +1,5 @@
 import os
+import time
 from tqdm import tqdm
 import pickle as pkl
 import argparse
@@ -42,8 +43,6 @@ def take_data(pkl_file, algorithm):
     final_selected_adv, final_selected_psnr = ruled_selection(final_adv_scores, final_psnr_scores)
     
     log = pkl_file['log']
-    print(len(log))
-    print(len(log[0]))
     adv_scores_log = [] # will returned
     psnr_scores_log = [] # will returned
     
@@ -118,10 +117,11 @@ def main(args):
         #     continue
         # i = 2
         pkl_path = os.path.join(args.pkl_dir, f"{i}.pkl")
-        # pkl_path = r"D:\Path-Recontruction-with-Evolution-Strategy\experiment\src\0.pkl"
-        # print("Loading file: ", pkl_path)
+
         try:
+            start = time.time()
             pkl_file = load_file(pkl_path)
+            print("Loading time: ", time.time() - start)
         except Exception as e:
             print("Error loading file: ", pkl_path)
             print("Exception: ", e)
