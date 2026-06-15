@@ -97,7 +97,6 @@ def take_data(pkl_file, algorithm):
 
 def load_file(pkl_file):
     with open(pkl_file, 'rb') as f:
-        raise
         return pkl.load(f)
     
 def main(args):
@@ -114,8 +113,9 @@ def main(args):
         # print("Loading file: ", pkl_path)
         try:
             pkl_file = load_file(pkl_path)
-        except:
+        except Exception as e:
             print("Error loading file: ", pkl_path)
+            print("Exception: ", e)
             continue
         (adv_scores_log, psnr_scores_log), (final_selected_adv, final_selected_psnr) = take_data(pkl_file, args.algorithm)
         
