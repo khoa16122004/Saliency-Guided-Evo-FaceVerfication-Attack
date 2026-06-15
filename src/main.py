@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--use_saliency_guidance', action='store_true', help="Enable saliency-guided initialization, mutation, and selection")
     parser.add_argument('--saliency_w', type=float, default=0.0, help="Weight for the saliency objective in GA")
     parser.add_argument('--saliency_noise_scale', type=float, default=0.15, help="Base noise scale for saliency-adaptive patch mutation")
-    parser.add_argument('--label', type=int, choices=[0], default=0) 
+    parser.add_argument('--label', type=int, choices=[0, 1], default=0) 
     parser.add_argument('--log', type=str, default="log")
     parser.add_argument('--seed', type=int, default=22520691)
     parser.add_argument('--pair_path', type=str, default=PAIR_PATH)
