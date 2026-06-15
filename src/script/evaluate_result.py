@@ -110,10 +110,11 @@ def main(args):
         # i = 2
         pkl_path = os.path.join(args.pkl_dir, f"{i}.pkl")
         # pkl_path = r"D:\Path-Recontruction-with-Evolution-Strategy\experiment\src\0.pkl"
-        print("Loading file: ", pkl_path)
+        # print("Loading file: ", pkl_path)
         try:
             pkl_file = load_file(pkl_path)
         except:
+            print("Error loading file: ", pkl_path)
             continue
         (adv_scores_log, psnr_scores_log), (final_selected_adv, final_selected_psnr) = take_data(pkl_file, args.algorithm)
         
