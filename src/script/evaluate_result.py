@@ -97,6 +97,7 @@ def take_data(pkl_file, algorithm):
 
 def load_file(pkl_file):
     with open(pkl_file, 'rb') as f:
+        raise
         return pkl.load(f)
     
 def main(args):
