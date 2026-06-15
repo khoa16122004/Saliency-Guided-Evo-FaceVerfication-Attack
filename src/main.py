@@ -1,4 +1,6 @@
 import argparse
+
+from tqdm import tqdm
 from population import Population
 from individual import Individual
 from algorithm import GA, NSGAII
@@ -13,6 +15,7 @@ import random
 from torchvision.utils import save_image
 import pickle as pkl
 from constant import IMG_DIR, PAIR_PATH, RESNET_VGGFACE, RESNET_WEBFACE, OUTPUT_DIR
+import torch.nn.functional as F
 def parse_args():
     parser = argparse.ArgumentParser(description="Genetic Algorithm for Image Patch Manipulation")
     parser.add_argument('--pop_size', type=int, default=100, help="Population size")
@@ -68,7 +71,7 @@ if __name__ == "__main__":
 
     end = start + 100
 
-    for i in range(start, len(DATA)):
+    for i in tqdm(range(start, len(DATA))):
         if i == end:
             break
         
@@ -78,6 +81,10 @@ if __name__ == "__main__":
         img1, img2 = img1.resize((160, 160)), img2.resize((160, 160))
         
         img1_torch, img2_torch = toTensor(img1), toTensor(img2)
+        img1_feature = MODEL(img1_torch.unsqueeze(0).to(MODEL.device))
+        img2_feature = MODEL(img2_torch.unsqueeze(0).to(MODEL.device))
+        sims = F.cosine_similarity(img1_feature, img2_feature, dim=1)
+        print("Similarity: ", sims.item())
 
         fitness = Fitness(patch_size=args.patch_size,
                         img1=img1_torch, img2=img2_torch,
@@ -135,16 +142,9 @@ if __name__ == "__main__":
         
         # save_image
         save_image(adv_img, os.path.join(output_img_dir, f"{i}.png"))
-        # results.append({
-        #     "Population": P,
-        #     "adv_img": adv_img,
-        #     "adv_score": adv_score,
-        #     "pnsr_score": pnsr_score})
         
         
         result = {
-                # "Population": P,
-                # "adv_img": adv_img,
                 "adv_score": adv_score,
                 "pnsr_score": pnsr_score,
                 "best_psnr_success": best_psnr_success,
@@ -152,7 +152,6 @@ if __name__ == "__main__":
                 "log": full_P
                 }
         
-        print("Adv score: ", adv_score)
         if adv_score > 0:
                 success_rate += 1
         # break
