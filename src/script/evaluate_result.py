@@ -2,6 +2,8 @@ import os
 from tqdm import tqdm
 import pickle as pkl
 import argparse
+from individual import Individual
+
 
 def argmax(lst):
     return max(range(len(lst)), key=lambda i: lst[i])
