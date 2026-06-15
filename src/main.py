@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     end = start + 100
 
-    for i in tqdm(range(start, len(DATA))):
+    for i in tqdm(range(start, end), desc="Processing samples"):
         if i == end:
             break
         
