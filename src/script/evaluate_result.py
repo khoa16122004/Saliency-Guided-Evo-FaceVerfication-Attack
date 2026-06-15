@@ -2,6 +2,13 @@ import os
 from tqdm import tqdm
 import pickle as pkl
 import argparse
+import sys
+
+CURRENT_DIR = os.path.dirname(__file__)
+SRC_DIR = os.path.dirname(CURRENT_DIR)
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
 from individual import Individual
 
 
