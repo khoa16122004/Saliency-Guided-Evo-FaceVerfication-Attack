@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from insightface.detection.blazeface_paddle.test_blazeface import parser
 
 
 def parse_args():
