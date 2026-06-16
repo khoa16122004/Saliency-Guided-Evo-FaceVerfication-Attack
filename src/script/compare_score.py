@@ -68,8 +68,12 @@ def get_weights(method):
     return 0.5, 0.5
 
 
-def build_exp_dir(args, method, fitness_type, label):
-
+def build_exp_dir(
+    args,
+    method,
+    fitness_type,
+    label
+):
     recons_w, attack_w = get_weights(method)
 
     if method == "GA_SO":
@@ -342,14 +346,18 @@ def main():
 
     for method in args.methods:
 
-        # ---------------------------------
-        # GA_SO: only one configuration
-        # ---------------------------------
+        # -------------------------------
+        # GA_SO
+        # -------------------------------
         if method == "GA_SO":
 
             fitness_type = "normal"
 
-            labels = [0, 1] if args.label == -1 else [args.label]
+            labels = (
+                [0, 1]
+                if args.label == -1
+                else [args.label]
+            )
 
             loaded_results = []
 
@@ -363,75 +371,109 @@ def main():
                 )
 
                 if not os.path.exists(exp_dir):
+
+                    print(
+                        f"Skip: {exp_dir}"
+                    )
+
                     continue
 
-                loaded_results.append(
-                    load_experiment(exp_dir)
-                )
+                try:
+
+                    loaded_results.append(
+                        load_experiment(
+                            exp_dir
+                        )
+                    )
+
+                except Exception as e:
+
+                    print(
+                        f"Failed loading "
+                        f"{exp_dir}: {e}"
+                    )
 
             if len(loaded_results) == 0:
+
                 continue
+
+            print(
+                f"\nLoading {method}"
+            )
 
             results[method] = merge_results(
                 loaded_results
             )
-            if not os.path.exists(exp_dir):
-
-                print(f"Skip: {exp_dir}")
-                continue
-
-            print(f"\nLoading {method}")
-
-            try:
-
-                results[method] = load_experiment(
-                    exp_dir
-                )
-
-            except Exception as e:
-
-                print(
-                    f"Failed loading {method}: {e}"
-                )
 
             continue
 
-        # ---------------------------------
+        # -------------------------------
         # GA / NSGAII
-        # ---------------------------------
+        # -------------------------------
         for fitness_type in args.fitness_types:
 
-            exp_dir = build_exp_dir(
-                args,
-                method,
-                fitness_type,
-                label
+            name = (
+                f"{method}_{fitness_type}"
             )
 
-            if not os.path.exists(exp_dir):
+            labels = (
+                [0, 1]
+                if args.label == -1
+                else [args.label]
+            )
 
-                print(f"Skip: {exp_dir}")
+            loaded_results = []
+
+            for label in labels:
+
+                exp_dir = build_exp_dir(
+                    args,
+                    method,
+                    fitness_type,
+                    label
+                )
+
+                if not os.path.exists(exp_dir):
+
+                    print(
+                        f"Skip: {exp_dir}"
+                    )
+
+                    continue
+
+                try:
+
+                    loaded_results.append(
+                        load_experiment(
+                            exp_dir
+                        )
+                    )
+
+                except Exception as e:
+
+                    print(
+                        f"Failed loading "
+                        f"{exp_dir}: {e}"
+                    )
+
+            if len(loaded_results) == 0:
+
                 continue
 
-            name = f"{method}_{fitness_type}"
+            print(
+                f"\nLoading {name}"
+            )
 
-            print(f"\nLoading {name}")
-
-            try:
-
-                results[name] = load_experiment(
-                    exp_dir
-                )
-
-            except Exception as e:
-
-                print(
-                    f"Failed loading {name}: {e}"
-                )
+            results[name] = merge_results(
+                loaded_results
+            )
 
     if len(results) == 0:
 
-        print("No experiment found.")
+        print(
+            "No experiment found."
+        )
+
         return
 
     print("\nLoaded experiments:")
@@ -443,14 +485,25 @@ def main():
             f"(N={results[name]['num_samples']})"
         )
 
-    plot_adv(results, args.save_dir)
-    plot_psnr(results, args.save_dir)
-    plot_tradeoff(results, args.save_dir)
-
-    print(
-        f"\nSaved figures to: {args.save_dir}"
+    plot_adv(
+        results,
+        args.save_dir
     )
 
+    plot_psnr(
+        results,
+        args.save_dir
+    )
+
+    plot_tradeoff(
+        results,
+        args.save_dir
+    )
+
+    print(
+        f"\nSaved figures to: "
+        f"{args.save_dir}"
+    )
 
 if __name__ == "__main__":
     main()
