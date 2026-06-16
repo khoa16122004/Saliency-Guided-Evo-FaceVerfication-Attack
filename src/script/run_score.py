@@ -58,6 +58,8 @@ num_samples = 0
 all_best_curves = []
 
 for file_name in sorted(os.listdir(final_dir)):
+    if not file_name.endswith(".txt"):
+        continue
     final_path = os.path.join(final_dir, file_name)
     process_path = final_path.replace("final_selected", "selected")
 
