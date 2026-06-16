@@ -405,7 +405,7 @@ def main():
                 args,
                 method,
                 fitness_type,
-                args.label
+                label
             )
 
             if not os.path.exists(exp_dir):
