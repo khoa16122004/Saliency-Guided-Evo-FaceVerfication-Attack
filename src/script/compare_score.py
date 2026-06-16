@@ -38,7 +38,7 @@ def parse_args():
 
     parser.add_argument("--guided", type=int, default=0)
 
-    parser.add_argument("--output_root", type=str, default="compare_scores")
+    parser.add_argument("--output_root", type=str, default="output")
 
     parser.add_argument(
         "--save_dir",
