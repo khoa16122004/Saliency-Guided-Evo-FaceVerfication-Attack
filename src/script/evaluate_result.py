@@ -34,18 +34,13 @@ def ruled_selection(iter_adv_scores, iter_psnr_scores):
         return iter_adv_scores[best_adv_iter], iter_psnr_scores[best_adv_iter]
     
 def take_data(pkl_file, algorithm):
-    # return log and return final Population
-    population = pkl_file['Population']
-    
-    final_adv_scores = [ind.adv_score for ind in population]
-    final_psnr_scores = [ind.psnr_score for ind in population]
 
-    final_selected_adv, final_selected_psnr = ruled_selection(final_adv_scores, final_psnr_scores)
     
     log = pkl_file['log']
     adv_scores_log = [] # will returned
     psnr_scores_log = [] # will returned
-    
+    final_selected_adv = pkl_file['adv_score']
+    final_selected_psnr = pkl_file['psnr_score']
     if algorithm.startswith("GA"):
         print("Proccessing ", algorithm)
         for i in range(0, len(log), 2):

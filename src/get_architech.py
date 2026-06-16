@@ -4,9 +4,72 @@ from torch import nn
 from torch.nn import functional as F
 import torchvision
 import torch.utils.model_zoo as modelzoo
-from constant import RESNET_VGGFACE, RESNET_WEBFACE
+from constant import ARCFACE_ONNX, COSFACE_ONNX, RESNET_VGGFACE, RESNET_WEBFACE
 # from pySR import SymbolicRegressionModule
 resnet18_url = 'https://download.pytorch.org/models/resnet18-5c106cde.pth'
+
+
+class OnnxRecognitionModel(nn.Module):
+    def __init__(self, model_file: str):
+        super().__init__()
+        try:
+            import onnx
+            import onnxruntime
+        except ImportError as exc:
+            raise ImportError(
+                "Loading ArcFace/CosFace ONNX models requires both 'onnx' and 'onnxruntime'."
+            ) from exc
+
+        if not os.path.exists(model_file):
+            raise FileNotFoundError(
+                f"Recognition model file not found: {model_file}. Put the ONNX file under src/pretrained_model/."
+            )
+
+        self.model_file = model_file
+        self.register_parameter("_device_anchor", nn.Parameter(torch.empty(0), requires_grad=False))
+
+        graph = onnx.load(model_file).graph
+        has_sub = False
+        has_mul = False
+        for node in graph.node[:8]:
+            if node.name.startswith('Sub') or node.name.startswith('_minus'):
+                has_sub = True
+            if node.name.startswith('Mul') or node.name.startswith('_mul'):
+                has_mul = True
+
+        if has_sub and has_mul:
+            self.input_mean = 0.0
+            self.input_std = 1.0
+        else:
+            self.input_mean = 127.5
+            self.input_std = 127.5
+
+        providers = ['CUDAExecutionProvider', 'CPUExecutionProvider'] if torch.cuda.is_available() else ['CPUExecutionProvider']
+        self.session = onnxruntime.InferenceSession(model_file, providers=providers)
+        input_cfg = self.session.get_inputs()[0]
+        self.input_name = input_cfg.name
+        self.input_shape = input_cfg.shape
+        self.input_hw = (int(self.input_shape[2]), int(self.input_shape[3]))
+        self.output_names = [output.name for output in self.session.get_outputs()]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.requires_grad:
+            raise RuntimeError(
+                "ONNX recognition models do not support autograd in this project. Use them for clean evaluation/inference only."
+            )
+
+        if x.dim() == 3:
+            x = x.unsqueeze(0)
+
+        input_device = x.device
+        if tuple(x.shape[-2:]) != self.input_hw:
+            x = F.interpolate(x, size=self.input_hw, mode="bilinear", align_corners=False)
+
+        batch = (x.detach().float().cpu().numpy() * 255.0 - self.input_mean) / self.input_std
+        output = self.session.run(self.output_names, {self.input_name: batch})[0]
+        embeddings = torch.from_numpy(output).to(input_device)
+        return F.normalize(embeddings, p=2, dim=1)
+
 
 def get_model(model_name):
     if model_name == "restnet_vggface":     
@@ -16,12 +79,20 @@ def get_model(model_name):
     elif model_name == "restnet_webface":
         model =  InceptionResnetV1("casia-webface")
         cp_pack = RESNET_WEBFACE
+    elif model_name == "arcface_onnx":
+        return OnnxRecognitionModel(ARCFACE_ONNX).eval()
+    elif model_name == "cosface_onnx":
+        return OnnxRecognitionModel(COSFACE_ONNX).eval()
+    else:
+        raise ValueError(
+            "Unknown model_name '{}'. Supported values: restnet_vggface, restnet_webface, arcface_onnx, cosface_onnx".format(model_name)
+        )
    
-    
-    torch_pack = torch.load(cp_pack)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    torch_pack = torch.load(cp_pack, map_location=device)
     model.load_state_dict(torch_pack)
     
-    return model.eval().cuda()
+    return model.eval().to(device)
 
 
 

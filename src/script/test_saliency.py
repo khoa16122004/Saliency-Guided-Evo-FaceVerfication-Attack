@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.utils import save_image
+from tqdm import tqdm
 
 CURRENT_DIR = os.path.dirname(__file__)
 SRC_DIR = os.path.dirname(CURRENT_DIR)
@@ -153,10 +154,17 @@ def overlay_heatmap(image: torch.Tensor, saliency_map: torch.Tensor, alpha: floa
     return overlay
 
 
+def compute_saliency_similarity(cam1: torch.Tensor, cam2: torch.Tensor) -> float:
+    flat_cam1 = cam1.reshape(1, -1)
+    flat_cam2 = cam2.reshape(1, -1)
+    return F.cosine_similarity(flat_cam1, flat_cam2, dim=1).item()
+
+
 def save_pair_outputs(output_dir: str,
                       pair_idx: int,
                       label: int,
                       cosine_score: float,
+                      saliency_similarity: float,
                       img1: torch.Tensor,
                       img2: torch.Tensor,
                       cam1: torch.Tensor,
@@ -191,6 +199,7 @@ def save_pair_outputs(output_dir: str,
         file_obj.write(f"pair_index: {pair_idx}\n")
         file_obj.write(f"label: {label}\n")
         file_obj.write(f"cosine_similarity: {cosine_score:.6f}\n")
+        file_obj.write(f"saliency_similarity: {saliency_similarity:.6f}\n")
 
 
 def extract_pair_saliency_maps(
@@ -210,10 +219,10 @@ def main():
         args.output_dir,
         f"gradcam_{args.model_name}_label={args.label}_num={args.num_samples}_seed={args.seed}",
     )
-    output_adv_dir = os.path.join(
-        args.output_adv_dir,
-        f"gradcam_{args.model_name}_label={args.label}_num={args.num_samples}_seed={args.seed}",
-    )
+    # output_adv_dir = os.path.join(
+    #     args.output_adv_dir,
+    #     f"gradcam_{args.model_name}_label={args.label}_num={args.num_samples}_seed={args.seed}",
+    # )
     os.makedirs(output_dir, exist_ok=True)
 
     model = get_model(args.model_name)
@@ -235,23 +244,24 @@ def main():
         start_idx = 0 if args.label == 0 else 300
 
     saved_count = 0
+    mean_saliency_similarity = 0
     try:
-        for pair_idx in range(start_idx, len(data)):
+        for pair_idx in tqdm(range(start_idx, len(data)), desc="Extracting saliency maps"):
             if saved_count >= args.num_samples:
                 break
 
             img1, img2, label = data[pair_idx]
-            adv_img1 = Image.open(
-                os.path.join(args.attack_dir, f"{pair_idx}.png")
-            ).convert("RGB")
+            # adv_img1 = Image.open(
+            #     os.path.join(args.attack_dir, f"{pair_idx}.png")
+            # ).convert("RGB")
             if label != args.label:
                 continue
 
             img1 = img1.resize((args.image_size, args.image_size))
-            adv_img1 = adv_img1.resize((args.image_size, args.image_size))
+            # adv_img1 = adv_img1.resize((args.image_size, args.image_size))
             img2 = img2.resize((args.image_size, args.image_size))
             img1_tensor = to_tensor(img1)
-            adv_img1_tensor = to_tensor(adv_img1)
+            # adv_img1_tensor = to_tensor(adv_img1)
             img2_tensor = to_tensor(img2)
             
 
@@ -261,41 +271,49 @@ def main():
                 img1=img1_tensor,
                 img2=img2_tensor,
             )
-            cosine_adv_score, cam_adv1, cam_adv2 = extract_pair_saliency_maps(
-                model=model,
-                extractor=extractor,
-                img1=adv_img1_tensor,
-                img2=img2_tensor,
-            )
+            saliency_similarity = compute_saliency_similarity(cam1, cam2)
+            mean_saliency_similarity += saliency_similarity
+            # cosine_adv_score, cam_adv1, cam_adv2 = extract_pair_saliency_maps(
+            #     model=model,
+            #     extractor=extractor,
+            #     img1=adv_img1_tensor,
+            #     img2=img2_tensor,
+            # )
 
             save_pair_outputs(
                 output_dir=output_dir,
                 pair_idx=pair_idx,
                 label=label,
                 cosine_score=cosine_score,
+                saliency_similarity=saliency_similarity,
                 img1=img1_tensor,
                 img2=img2_tensor,
                 cam1=cam1,
                 cam2=cam2,
                 overlay_alpha=args.overlay_alpha,
             )
-            save_pair_outputs(
-                output_dir=output_adv_dir,
-                pair_idx=pair_idx,
-                label=label,
-                cosine_score=cosine_score,
-                img1=adv_img1_tensor,
-                img2=img2_tensor,
-                cam1=cam_adv1,
-                cam2=cam_adv2,
-                overlay_alpha=args.overlay_alpha,
-            )
+            # save_pair_outputs(
+            #     output_dir=output_adv_dir,
+            #     pair_idx=pair_idx,
+            #     label=label,
+            #     cosine_score=cosine_score,
+            #     saliency_similarity=saliency_similarity,
+            #     img1=adv_img1_tensor,
+            #     img2=img2_tensor,
+            #     cam1=cam_adv1,
+            #     cam2=cam_adv2,
+            #     overlay_alpha=args.overlay_alpha,
+            # )
             saved_count += 1
-            print(f"Saved pair {pair_idx} with cosine similarity {cosine_score:.6f}")
+            # print(
+            #     f"Saved pair {pair_idx} with cosine similarity {cosine_score:.6f} "
+            #     f"and saliency similarity {saliency_similarity:.6f}"
+            # )
     finally:
         extractor.remove()
 
     print(f"Finished extracting saliency maps for {saved_count} pairs")
+    print(f"Mean saliency similarity: {mean_saliency_similarity / saved_count:.6f}")
 
 
 if __name__ == "__main__":

@@ -219,4 +219,5 @@ __marimo__/
 
 src/pretrained_model/*.pt
 src/output
+
 lfw_preprocess
