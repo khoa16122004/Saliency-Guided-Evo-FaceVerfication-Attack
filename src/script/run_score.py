@@ -70,22 +70,25 @@ total_adv_score = 0.0
 total_psnr = 0.0
 num_samples = 0
 
-all_best_fitness_curves = []
-all_best_adv_curves = []
-all_best_psnr_curves = []
+all_adv_curves = []
+all_psnr_curves = []
 
 for file_name in sorted(os.listdir(final_dir)):
+
     if not file_name.endswith(".txt"):
         continue
 
     final_path = os.path.join(final_dir, file_name)
     process_path = final_path.replace("final_selected", "selected")
 
-    # ==================================================
+    # =============================
     # Final result
-    # ==================================================
+    # =============================
     with open(final_path, "r") as f:
-        adv_score, psnr_score = map(float, f.readline().strip().split())
+        adv_score, psnr_score = map(
+            float,
+            f.readline().strip().split()
+        )
 
     total_adv_score += adv_score
     total_psnr += psnr_score
@@ -95,12 +98,13 @@ for file_name in sorted(os.listdir(final_dir)):
 
     num_samples += 1
 
-    # ==================================================
+    # =============================
     # Optimization process
-    # ==================================================
+    # =============================
     with open(process_path, "r") as f:
+
         data = [
-            list(map(float, line.strip().split()))
+            list(map(float, line.split()))
             for line in f
             if line.strip()
         ]
@@ -108,10 +112,13 @@ for file_name in sorted(os.listdir(final_dir)):
     if len(data) == 0:
         continue
 
-    adv_scores = np.array([row[0] for row in data]) # curve
-    psnr_scores = np.array([row[1] for row in data]) # curve
-    print(adv_scores.shape)
-    raise
+    data = np.asarray(data)
+
+    adv_scores = data[:, 0]
+    psnr_scores = data[:, 1]
+
+    all_adv_curves.append(adv_scores)
+    all_psnr_curves.append(psnr_scores)
 
   
 
@@ -128,47 +135,31 @@ print(f"Success Rate: {success_rate:.4f}")
 print(f"Avg Adv     : {avg_adv_score:.4f}")
 print(f"Avg PSNR    : {avg_psnr:.4f}")
 
-# ==================================================
+# ===================================
 # Visualization
-# ==================================================
+# ===================================
 
 min_len = min(
-    min(len(curve) for curve in all_best_fitness_curves),
-    min(len(curve) for curve in all_best_adv_curves),
-    min(len(curve) for curve in all_best_psnr_curves),
+    min(len(curve) for curve in all_adv_curves),
+    min(len(curve) for curve in all_psnr_curves),
 )
 
-all_best_fitness_curves = np.array(
-    [curve[:min_len] for curve in all_best_fitness_curves]
+all_adv_curves = np.array(
+    [curve[:min_len] for curve in all_adv_curves]
 )
 
-all_best_adv_curves = np.array(
-    [curve[:min_len] for curve in all_best_adv_curves]
+all_psnr_curves = np.array(
+    [curve[:min_len] for curve in all_psnr_curves]
 )
 
-all_best_psnr_curves = np.array(
-    [curve[:min_len] for curve in all_best_psnr_curves]
-)
+mean_adv_curve = all_adv_curves.mean(axis=0)
 
-mean_fitness_curve = all_best_fitness_curves.mean(axis=0)
-mean_adv_curve = all_best_adv_curves.mean(axis=0)
-mean_psnr_curve = all_best_psnr_curves.mean(axis=0)
-
-# ==================================================
-# Save figures
-# ==================================================
-
-save_curve(
-    mean_fitness_curve,
-    ylabel="Fitness",
-    title=f"{args.method} Fitness Evolution",
-    save_path=os.path.join(path, "process_fitness.png"),
-)
+mean_psnr_curve = all_psnr_curves.mean(axis=0)
 
 save_curve(
     mean_adv_curve,
     ylabel="Adv Score",
-    title=f"{args.method} Adversarial Score Evolution",
+    title=f"{args.method} Adv Evolution",
     save_path=os.path.join(path, "process_adv.png"),
 )
 
@@ -180,9 +171,8 @@ save_curve(
 )
 
 print("Saved:")
-print(f"  {os.path.join(path, 'process_fitness.png')}")
-print(f"  {os.path.join(path, 'process_adv.png')}")
-print(f"  {os.path.join(path, 'process_psnr.png')}")
+print(os.path.join(path, "process_adv.png"))
+print(os.path.join(path, "process_psnr.png"))
 
 # ==================================================
 # Save summary
