@@ -3,6 +3,11 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
+label = [0, 1]
+method = ['GA']
+fitness_type = ['normal', 'adaptive']
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -47,7 +52,7 @@ path = (
     f"output/seed={args.seed}"
     f"_log_{args.method}"
     f"_niter={args.niter}"
-    f"_label=0"
+    f"_label={args.label}"
     f"_reconsw={args.recons_w}"
     f"_attackw={args.attack_w}"
     f"_saliencyw={args.saliency_w}"
