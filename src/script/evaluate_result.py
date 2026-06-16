@@ -104,8 +104,11 @@ def load_file(pkl_file):
     
 def main(args):
     
-    os.makedirs(args.output_seleted_dir, exist_ok=True)
-    os.makedirs(args.output_final_seleted_dir, exist_ok=True)
+    ouptut_selected_dir = f"../{args.pkl_dir}/selected_dir"
+    ouptut_final_selected_dir = f"../{args.pkl_dir}/final_selected_dir"
+    
+    os.makedirs(ouptut_selected_dir, exist_ok=True)
+    os.makedirs(ouptut_final_selected_dir, exist_ok=True)
     
     for i in tqdm(range(len(os.listdir(args.pkl_dir)))):
         # if i == 0:
