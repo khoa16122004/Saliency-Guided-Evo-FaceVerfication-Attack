@@ -104,13 +104,14 @@ class Fitness:
  
 
     def benchmark(self, P: list['Individual']) -> torch.Tensor:
-        adv_scores = self.evaluate_adv(P)
-        psnr_scores = self.evaluate_psnr(P)
+        real_adv_scores = self.evaluate_adv(P)
+        clip_adv_scores = real_adv_scores.clone()
+        real_psnr_scores = self.evaluate_psnr(P)
         saliency_scores = self.evaluate_saliency(P)
         
         for i in range(len(P)):
-            P[i].adv_score = adv_scores[i]
-            P[i].psnr_score = psnr_scores[i]
+            P[i].adv_score = real_adv_scores[i]
+            P[i].psnr_score = real_psnr_scores[i]
             P[i].saliency_score = saliency_scores[i]
         #if self.fitness_type == "normalize":
             # normalize each score
@@ -119,10 +120,9 @@ class Fitness:
             # psnr_scores_normalize = (adv_scores - self.min_psnr) / (self.max_psnr - self.min_psnr)
             # return adv_scores_normalize + psnr_scores_normalize, adv_scores, psnr_scores
         if self.fitness_type == "adaptive":
-                adv_scores = torch.where(adv_scores > 0, torch.tensor(0.0, device=adv_scores.device), adv_scores)
-
-        combined = adv_scores * self.attack_w + psnr_scores * self.recons_w + saliency_scores * self.saliency_w
-        return combined, adv_scores, psnr_scores, saliency_scores
+            clip_adv_scores = torch.where(real_adv_scores > 0, torch.tensor(0.0, device=real_adv_scores.device), real_adv_scores)
+        combined = clip_adv_scores * self.attack_w + real_psnr_scores * self.recons_w + saliency_scores * self.saliency_w
+        return combined, real_adv_scores, real_psnr_scores, saliency_scores
     
     def benchmark_not_adaptive(self, P: list['Individual']) -> torch.Tensor:
         adv_scores = self.evaluate_adv(P)

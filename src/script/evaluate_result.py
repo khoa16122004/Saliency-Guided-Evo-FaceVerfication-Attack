@@ -33,7 +33,7 @@ def ruled_selection(iter_adv_scores, iter_psnr_scores):
         best_adv_iter = argmax(iter_adv_scores)
         return iter_adv_scores[best_adv_iter], iter_psnr_scores[best_adv_iter]
     
-def take_data(pkl_file, algorithm):
+def take_data(pkl_file, algorithm, args):
 
     
     log = pkl_file['log']
@@ -61,8 +61,8 @@ def take_data(pkl_file, algorithm):
                     
             elif algorithm == "GA_adaptive":
                 current_combined_fitnesses = [
-                    0.5 * iter_psnr_scores[j] if iter_adv_scores[j] >= 0 
-                    else 0.5 * iter_adv_scores[j] + 0.5 * iter_psnr_scores[j] 
+                    args.recons_w * iter_psnr_scores[j] if iter_adv_scores[j] >= 0 
+                    else args.attack_w * iter_adv_scores[j] + args.recons_w * iter_psnr_scores[j] 
                     for j in range(len(iter_adv_scores))
                 ]
                 
@@ -127,7 +127,7 @@ def main(args):
             print("Error loading file: ", pkl_path)
             print("Exception: ", e)
             continue
-        (adv_scores_log, psnr_scores_log), (final_selected_adv, final_selected_psnr) = take_data(pkl_file, args.algorithm)
+        (adv_scores_log, psnr_scores_log), (final_selected_adv, final_selected_psnr) = take_data(pkl_file, args.algorithm, args)
         
         print("Save results")
         # selected_i.txt  
@@ -150,6 +150,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_seleted_dir", type=str, default="process_result/selected")
     parser.add_argument("--output_final_seleted_dir", type=str, default="process_result/final_selected")
     parser.add_argument("--algorithm", type=str, required=True)
+    parser.add_argument("--recons_w", type=float, default=0.5)
+    parser.add_argument("--attack_w", type=float, default=0.5)
     args = parser.parse_args()
     main(args)
 # python process_result.py     

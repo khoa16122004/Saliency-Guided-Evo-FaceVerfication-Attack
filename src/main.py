@@ -143,7 +143,7 @@ if __name__ == "__main__":
         
         # save_image
         save_image(adv_img, os.path.join(output_img_dir, f"{i}.png"))
-        
+
         
         result = {
                 "adv_score": adv_score,

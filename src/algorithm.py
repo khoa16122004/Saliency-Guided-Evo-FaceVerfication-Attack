@@ -301,13 +301,12 @@ class GA:
         fitness, adv_scores, psnr_scores, _ = self.fitness.benchmark(P)
         best_idx = torch.argmax(fitness)
         best_patch = P[best_idx]
-        _, adv_scores, psnr_scores, _ = self.fitness.benchmark_not_adaptive([best_patch])
-
         best_adv_img = self.fitness.apply_patch_to_image(best_patch.patch, best_patch.location)
-        
-        print(f"Best_adv: {adv_scores[0]}, Best_psnr: {psnr_scores[0]}")
+        best_adv_score = adv_scores[best_idx]
+        best_psnr_score = psnr_scores[best_idx]
+        print(f"Best_adv: {best_adv_score}, Best_psnr: {best_psnr_score}")
         # save_image(best_adv_img, 'process.png')
-        return best_adv_img ,adv_scores[0].item(), psnr_scores[0].item()
+        return best_adv_img, best_adv_score.item(), best_psnr_score.item()
         
 
 selector = NonDominatedSorting()
