@@ -2,257 +2,220 @@ import os
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
-LABELS = [0, 1]
-FITNESS_TYPES = ["normal", "adaptive"]
+def load_selected_file(file_path):
+    """
+    selected_i.txt
 
+    adv psnr
+    adv psnr
+    ...
+    """
+    adv_scores = []
+    psnr_scores = []
 
-def parse_args():
-    parser = argparse.ArgumentParser()
+    with open(file_path, "r") as f:
+        for line in f:
+            line = line.strip()
 
-    parser.add_argument("--seed", type=int, default=22520691)
-    parser.add_argument("--method", type=str, default="GA")
-
-    parser.add_argument("--recons_w", type=float, default=0.5)
-    parser.add_argument("--attack_w", type=float, default=0.5)
-    parser.add_argument("--saliency_w", type=float, default=0.0)
-
-    parser.add_argument("--niter", type=int, default=1000)
-    parser.add_argument("--popsize", type=int, default=100)
-    parser.add_argument("--toursize", type=int, default=4)
-    parser.add_argument("--patchsize", type=int, default=16)
-
-    parser.add_argument("--prob_location_mutate", type=float, default=0.2)
-    parser.add_argument("--prob_patch_mutate", type=float, default=0.9)
-
-    parser.add_argument("--guided", type=int, default=0)
-
-    return parser.parse_args()
-
-
-def build_path(args, label, fitness_type):
-    return (
-        f"output/seed={args.seed}"
-        f"_log_{args.method}"
-        f"_niter={args.niter}"
-        f"_label={label}"
-        f"_reconsw={args.recons_w}"
-        f"_attackw={args.attack_w}"
-        f"_saliencyw={args.saliency_w}"
-        f"_guided={args.guided}"
-        f"_popsize={args.popsize}"
-        f"_toursize={args.toursize}"
-        f"_patchsize={args.patchsize}"
-        f"_problocationmutate={args.prob_location_mutate}"
-        f"_probpatchmutate={args.prob_patch_mutate}"
-        f"_fitnesstype={fitness_type}"
-    )
-
-
-def load_mean_curves(args, label, fitness_type):
-    path = build_path(args, label, fitness_type)
-
-    final_dir = os.path.join(path, "final_selected")
-
-    if not os.path.exists(final_dir):
-        print(f"[WARNING] Missing folder: {final_dir}")
-        return None, None
-
-    all_best_adv_curves = []
-    all_best_psnr_curves = []
-
-    for file_name in sorted(os.listdir(final_dir)):
-        if not file_name.endswith(".txt"):
-            continue
-
-        final_path = os.path.join(final_dir, file_name)
-        process_path = final_path.replace(
-            "final_selected",
-            "selected"
-        )
-
-        if not os.path.exists(process_path):
-            continue
-
-        with open(process_path, "r") as f:
-            data = [
-                list(map(float, line.strip().split()))
-                for line in f
-                if line.strip()
-            ]
-
-        if len(data) == 0:
-            continue
-
-        adv_scores = np.array([row[0] for row in data])
-        psnr_scores = np.array([row[1] for row in data])
-
-        # ==================================================
-        # Fitness definition
-        # ==================================================
-
-        if fitness_type == "adaptive":
-            # positive adv contributes 0
-            adv_for_fitness = np.minimum(adv_scores, 0)
-        else:
-            adv_for_fitness = adv_scores
-
-        fitness_scores = (
-            args.attack_w * adv_for_fitness
-            + args.recons_w * psnr_scores
-        )
-
-        # ==================================================
-        # Best-so-far according to fitness
-        # ==================================================
-
-        best_adv_curve = []
-        best_psnr_curve = []
-
-        best_idx = 0
-
-        for i in range(len(fitness_scores)):
-            if fitness_scores[i] > fitness_scores[best_idx]:
-                best_idx = i
-
-            # IMPORTANT:
-            # plot REAL scores, not clipped scores
-            best_adv_curve.append(
-                adv_scores[best_idx]
-            )
-
-            best_psnr_curve.append(
-                psnr_scores[best_idx]
-            )
-
-        all_best_adv_curves.append(best_adv_curve)
-        all_best_psnr_curves.append(best_psnr_curve)
-
-    if len(all_best_adv_curves) == 0:
-        return None, None
-
-    min_len = min(
-        min(len(c) for c in all_best_adv_curves),
-        min(len(c) for c in all_best_psnr_curves),
-    )
-
-    adv_curves = np.array([
-        c[:min_len]
-        for c in all_best_adv_curves
-    ])
-
-    psnr_curves = np.array([
-        c[:min_len]
-        for c in all_best_psnr_curves
-    ])
-
-    mean_adv_curve = adv_curves.mean(axis=0)
-    mean_psnr_curve = psnr_curves.mean(axis=0)
-
-    return mean_adv_curve, mean_psnr_curve
-
-
-def plot_metric_comparison(
-    args,
-    metric_name,
-    save_path,
-    curve_loader,
-):
-    fig, axes = plt.subplots(
-        1,
-        len(LABELS),
-        figsize=(12, 5),
-        sharey=True,
-    )
-
-    if len(LABELS) == 1:
-        axes = [axes]
-
-    for ax, label in zip(axes, LABELS):
-
-        for fitness_type in FITNESS_TYPES:
-
-            adv_curve, psnr_curve = curve_loader(
-                args,
-                label,
-                fitness_type,
-            )
-
-            if adv_curve is None:
+            if len(line) == 0:
                 continue
 
-            curve = (
-                adv_curve
-                if metric_name == "Adv Score"
-                else psnr_curve
-            )
+            adv, psnr = map(float, line.split())
 
-            ax.plot(
-                curve,
-                linewidth=2,
-                label=fitness_type.capitalize(),
-            )
+            adv_scores.append(adv)
+            psnr_scores.append(psnr)
 
-        ax.set_title(f"Label {label}")
-        ax.set_xlabel("Iteration")
-        ax.grid(True)
+    return np.array(adv_scores), np.array(psnr_scores)
 
-        if metric_name == "Adv Score":
-            ax.set_ylabel("Adv Score")
-        else:
-            ax.set_ylabel("PSNR")
 
-        ax.legend()
+def load_method(selected_dir):
 
-    plt.suptitle(
-        f"{args.method}: Normal vs Adaptive ({metric_name})"
+    all_adv = []
+    all_psnr = []
+
+    files = sorted(
+        [
+            f for f in os.listdir(selected_dir)
+            if f.startswith("selected_") and f.endswith(".txt")
+        ],
+        key=lambda x: int(x.split("_")[1].split(".")[0])
     )
+
+    for fname in tqdm(files, desc=os.path.basename(os.path.dirname(selected_dir))):
+
+        fpath = os.path.join(selected_dir, fname)
+
+        adv, psnr = load_selected_file(fpath)
+
+        all_adv.append(adv)
+        all_psnr.append(psnr)
+
+    min_len = min(len(x) for x in all_adv)
+
+    all_adv = np.array([x[:min_len] for x in all_adv])
+    all_psnr = np.array([x[:min_len] for x in all_psnr])
+
+    mean_adv = all_adv.mean(axis=0)
+    std_adv = all_adv.std(axis=0)
+
+    mean_psnr = all_psnr.mean(axis=0)
+    std_psnr = all_psnr.std(axis=0)
+
+    return {
+        "mean_adv": mean_adv,
+        "std_adv": std_adv,
+        "mean_psnr": mean_psnr,
+        "std_psnr": std_psnr,
+        "num_samples": len(all_adv),
+    }
+
+
+def plot_adv(method_results, output_dir):
+
+    plt.figure(figsize=(10, 6))
+
+    for method_name, result in method_results.items():
+
+        y = result["mean_adv"]
+        x = np.arange(len(y))
+
+        plt.plot(
+            x,
+            y,
+            linewidth=2,
+            label=method_name,
+        )
+
+    plt.xlabel("Iteration")
+    plt.ylabel("Adversarial Score")
+    plt.title("Average Adversarial Score")
+    plt.grid(True)
+    plt.legend()
 
     plt.tight_layout()
 
-    plt.savefig(
-        save_path,
-        dpi=300,
-        bbox_inches="tight",
-    )
-
+    save_path = os.path.join(output_dir, "compare_adv.png")
+    plt.savefig(save_path, dpi=300)
     plt.close()
 
-    print(f"Saved: {save_path}")
+    print("Saved:", save_path)
 
 
-def main():
-    args = parse_args()
+def plot_psnr(method_results, output_dir):
 
-    adv_save_path = (
-        f"comparison_adv_"
-        f"{args.method}_"
-        f"rw={args.recons_w}_"
-        f"aw={args.attack_w}.png"
-    )
+    plt.figure(figsize=(10, 6))
 
-    psnr_save_path = (
-        f"comparison_psnr_"
-        f"{args.method}_"
-        f"rw={args.recons_w}_"
-        f"aw={args.attack_w}.png"
-    )
+    for method_name, result in method_results.items():
 
-    plot_metric_comparison(
-        args=args,
-        metric_name="Adv Score",
-        save_path=adv_save_path,
-        curve_loader=load_mean_curves,
-    )
+        y = result["mean_psnr"]
+        x = np.arange(len(y))
 
-    plot_metric_comparison(
-        args=args,
-        metric_name="PSNR",
-        save_path=psnr_save_path,
-        curve_loader=load_mean_curves,
-    )
+        plt.plot(
+            x,
+            y,
+            linewidth=2,
+            label=method_name,
+        )
+
+    plt.xlabel("Iteration")
+    plt.ylabel("PSNR")
+    plt.title("Average PSNR")
+    plt.grid(True)
+    plt.legend()
+
+    plt.tight_layout()
+
+    save_path = os.path.join(output_dir, "compare_psnr.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+    print("Saved:", save_path)
+
+
+def plot_tradeoff(method_results, output_dir):
+
+    plt.figure(figsize=(8, 8))
+
+    for method_name, result in method_results.items():
+
+        plt.plot(
+            result["mean_psnr"],
+            result["mean_adv"],
+            linewidth=2,
+            label=method_name,
+        )
+
+        plt.scatter(
+            result["mean_psnr"][-1],
+            result["mean_adv"][-1],
+            s=60,
+        )
+
+    plt.xlabel("PSNR")
+    plt.ylabel("Adversarial Score")
+    plt.title("PSNR vs Adversarial Score")
+    plt.grid(True)
+    plt.legend()
+
+    plt.tight_layout()
+
+    save_path = os.path.join(output_dir, "compare_tradeoff.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+
+    print("Saved:", save_path)
+
+
+def main(args):
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    method_results = {}
+
+    methods = [
+        ("GA_single_objective", args.ga_so),
+        ("GA_normal", args.ga_normal),
+        ("GA_adaptive", args.ga_adaptive),
+        # ("NSGAII", args.nsga),
+    ]
+
+    for method_name, result_dir in methods:
+
+        if result_dir is None:
+            continue
+
+        selected_dir = os.path.join(result_dir, "selected")
+
+        print(f"\nLoading {method_name}")
+
+        method_results[method_name] = load_method(selected_dir)
+
+    plot_adv(method_results, args.output_dir)
+
+    plot_psnr(method_results, args.output_dir)
+
+    plot_tradeoff(method_results, args.output_dir)
 
 
 if __name__ == "__main__":
-    main()
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--ga_normal", type=str)
+    parser.add_argument("--ga_adaptive", type=str)
+
+    parser.add_argument("--nsga_normal", type=str)
+    parser.add_argument("--nsga_adaptive", type=str)
+
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="compare_results"
+    )
+
+    args = parser.parse_args()
+
+    main(args)
