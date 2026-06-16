@@ -68,17 +68,19 @@ def get_weights(method):
     return 0.5, 0.5
 
 
-def build_exp_dir(args, method, fitness_type):
+def build_exp_dir(args, method, fitness_type, label):
 
     recons_w, attack_w = get_weights(method)
+
     if method == "GA_SO":
-        method = "GA"  # For GA_SO, we will look for the GA folder with recons_w=0.0 and attack_w=1.0
+        method = "GA"
+
     return (
         f"{args.output_root}/"
         f"seed={args.seed}"
         f"_log_{method}"
         f"_niter={args.niter}"
-        f"_label={args.label}"
+        f"_label={label}"
         f"_reconsw={recons_w}"
         f"_attackw={attack_w}"
         f"_saliencyw={args.saliency_w}"
@@ -90,6 +92,43 @@ def build_exp_dir(args, method, fitness_type):
         f"_probpatchmutate={args.prob_patch_mutate}"
         f"_fitnesstype={fitness_type}"
     )
+
+def merge_results(result_list):
+
+    all_adv = []
+    all_psnr = []
+
+    for result in result_list:
+
+        for curve in result["all_adv"]:
+            all_adv.append(curve)
+
+        for curve in result["all_psnr"]:
+            all_psnr.append(curve)
+
+    min_len = min(len(x) for x in all_adv)
+
+    all_adv = np.array(
+        [x[:min_len] for x in all_adv]
+    )
+
+    all_psnr = np.array(
+        [x[:min_len] for x in all_psnr]
+    )
+
+    return {
+        "mean_adv": all_adv.mean(axis=0),
+        "std_adv": all_adv.std(axis=0),
+
+        "mean_psnr": all_psnr.mean(axis=0),
+        "std_psnr": all_psnr.std(axis=0),
+
+        "num_samples": len(all_adv),
+
+        # giữ raw để merge tiếp nếu cần
+        "all_adv": all_adv,
+        "all_psnr": all_psnr,
+    }
 
 
 def load_selected_file(txt_file):
@@ -166,9 +205,12 @@ def load_experiment(exp_dir):
         "mean_psnr": all_psnr.mean(axis=0),
         "std_psnr": all_psnr.std(axis=0),
 
-        "num_samples": len(all_adv)
-    }
+        "num_samples": len(all_adv),
 
+        # raw curves
+        "all_adv": all_adv,
+        "all_psnr": all_psnr,
+    }
 
 def plot_adv(results, save_dir):
 
@@ -307,12 +349,32 @@ def main():
 
             fitness_type = "normal"
 
-            exp_dir = build_exp_dir(
-                args,
-                method,
-                fitness_type
-            )
+            labels = [0, 1] if args.label == -1 else [args.label]
 
+            loaded_results = []
+
+            for label in labels:
+
+                exp_dir = build_exp_dir(
+                    args,
+                    method,
+                    fitness_type,
+                    label
+                )
+
+                if not os.path.exists(exp_dir):
+                    continue
+
+                loaded_results.append(
+                    load_experiment(exp_dir)
+                )
+
+            if len(loaded_results) == 0:
+                continue
+
+            results[method] = merge_results(
+                loaded_results
+            )
             if not os.path.exists(exp_dir):
 
                 print(f"Skip: {exp_dir}")

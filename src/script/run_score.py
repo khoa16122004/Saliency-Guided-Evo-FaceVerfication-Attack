@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
+from insightface.detection.blazeface_paddle.test_blazeface import parser
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -26,8 +28,7 @@ def parse_args():
     parser.add_argument("--attack_w", type=float, default=0.5)
     parser.add_argument("--saliency_w", type=float, default=0.0)
 
-    parser.add_argument("--label", type=int, default=0)
-
+    parser.add_argument("--label", type=int, default=-1)
     parser.add_argument("--niter", type=int, default=1000)
     parser.add_argument("--popsize", type=int, default=100)
     parser.add_argument("--toursize", type=int, default=4)
