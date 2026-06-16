@@ -104,17 +104,17 @@ def load_file(pkl_file):
     
 def main(args):
     
-    ouptut_selected_dir = f"../{args.pkl_dir}/selected_dir"
-    ouptut_final_selected_dir = f"../{args.pkl_dir}/final_selected_dir"
+    ouptut_selected_dir = f"{args.result_dir}/selected"
+    ouptut_final_selected_dir = f"{args.result_dir}/final_selected"
     
     os.makedirs(ouptut_selected_dir, exist_ok=True)
     os.makedirs(ouptut_final_selected_dir, exist_ok=True)
     
-    for i in tqdm(range(len(os.listdir(args.pkl_dir)))):
+    for i in tqdm(range(len(os.listdir(os.path.join(args.result_dir, "pickle"))))):
         # if i == 0:
         #     continue
         # i = 2
-        pkl_path = os.path.join(args.pkl_dir, f"{i}.pkl")
+        pkl_path = os.path.join(args.result_dir, "pickle", f"{i}.pkl")
 
         try:
             start = time.time()
@@ -143,7 +143,7 @@ def main(args):
 
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pkl_dir", type=str, required=True)
+    parser.add_argument("--result_dir", type=str, required=True)
     parser.add_argument("--output_seleted_dir", type=str, default="process_result/selected")
     parser.add_argument("--output_final_seleted_dir", type=str, default="process_result/final_selected")
     parser.add_argument("--algorithm", type=str, required=True)
