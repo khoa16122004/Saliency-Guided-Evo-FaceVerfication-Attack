@@ -14,7 +14,7 @@ def parse_args():
         "--methods",
         nargs="+",
         default=["GA", 
-                #  "NSGAII",
+                 "NSGAII",
                  "GA_SO"]
     )
 
