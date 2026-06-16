@@ -14,8 +14,9 @@ from torchvision import transforms
 import random
 from torchvision.utils import save_image
 import pickle as pkl
-from constant import IMG_DIR, PAIR_PATH, RESNET_VGGFACE, RESNET_WEBFACE, OUTPUT_DIR
+from constant import IMG_DIR, PAIR_PATH, RESNET_VGGFACE, RESNET_WEBFACE, OUTPUT_DIR, MODEL_RESIZE
 import torch.nn.functional as F
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Genetic Algorithm for Image Patch Manipulation")
     parser.add_argument('--pop_size', type=int, default=100, help="Population size")

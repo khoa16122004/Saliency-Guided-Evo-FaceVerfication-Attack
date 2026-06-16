@@ -110,7 +110,8 @@ def main(args):
     os.makedirs(ouptut_selected_dir, exist_ok=True)
     os.makedirs(ouptut_final_selected_dir, exist_ok=True)
     
-    for i in tqdm(range(len(os.listdir(os.path.join(args.result_dir, "pickle"))))):
+    for pickle_name in tqdm(os.listdir(os.path.join(args.result_dir, "pickle"))):
+        i = int(pickle_name.split(".")[0])
         # if i == 0:
         #     continue
         # i = 2

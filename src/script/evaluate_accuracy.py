@@ -131,6 +131,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     model = get_model(args.model_name)
+    print(model)
     device = resolve_device(model, args.device)
     model = model.to(device).eval()
 
