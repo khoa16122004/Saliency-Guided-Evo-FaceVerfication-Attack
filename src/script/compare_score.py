@@ -188,12 +188,12 @@ def plot_adv(results, save_dir):
             label=name
         )
 
-        plt.fill_between(
-            x,
-            mean - std,
-            mean + std,
-            alpha=0.15
-        )
+        # plt.fill_between(
+        #     x,
+        #     mean - std,
+        #     mean + std,
+        #     alpha=0.15
+        # )
 
     plt.xlabel("Iteration")
     plt.ylabel("Adversarial Score")
