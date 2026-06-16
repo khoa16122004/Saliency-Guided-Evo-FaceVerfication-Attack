@@ -49,6 +49,64 @@ def parse_args():
     return parser.parse_args()
 
 
+def load_final_statistics(exp_dir):
+
+    pickle_dir = os.path.join(exp_dir, "pickle")
+
+    adv_scores = []
+    psnr_scores = []
+
+    files = sorted(
+        [
+            f for f in os.listdir(pickle_dir)
+            if f.endswith(".pkl")
+        ],
+        key=lambda x: int(x.split(".")[0])
+    )
+
+    for fname in files:
+
+        pkl_path = os.path.join(
+            pickle_dir,
+            fname
+        )
+
+        try:
+
+            with open(pkl_path, "rb") as f:
+                data = pkl.load(f)
+
+            adv_scores.append(
+                float(data["adv_score"])
+            )
+
+            psnr_scores.append(
+                float(data["pnsr_score"])
+            )
+
+        except Exception as e:
+
+            print(
+                f"Skip {pkl_path}: {e}"
+            )
+
+    adv_scores = np.array(adv_scores)
+    psnr_scores = np.array(psnr_scores)
+
+    success = adv_scores > 0
+
+    return {
+        "final_adv_mean": adv_scores.mean(),
+        "final_adv_std": adv_scores.std(),
+
+        "final_psnr_mean": psnr_scores.mean(),
+        "final_psnr_std": psnr_scores.std(),
+
+        "asr": success.mean() * 100,
+        "num_samples": len(adv_scores),
+    }
+
+
 def build_exp_dir(args, method, fitness_type):
 
     return (
@@ -127,7 +185,7 @@ def load_experiment(exp_dir):
         [x[:min_len] for x in all_psnr]
     )
 
-    return {
+    curve_result = {
         "mean_adv": all_adv.mean(axis=0),
         "std_adv": all_adv.std(axis=0),
 
@@ -135,6 +193,44 @@ def load_experiment(exp_dir):
         "std_psnr": all_psnr.std(axis=0),
     }
 
+    final_result = load_final_statistics(
+        exp_dir
+    )
+    
+    curve_result.update(final_result)
+
+    return curve_result
+
+
+def print_summary(results):
+
+    print("\n")
+    print("=" * 100)
+
+    header = (
+        f"{'Method':<20}"
+        f"{'ASR (%)':>12}"
+        f"{'Adv Mean':>15}"
+        f"{'Adv Std':>12}"
+        f"{'PSNR Mean':>15}"
+        f"{'PSNR Std':>12}"
+    )
+
+    print(header)
+    print("-" * 100)
+
+    for name, result in results.items():
+
+        print(
+            f"{name:<20}"
+            f"{result['asr']:>12.2f}"
+            f"{result['final_adv_mean']:>15.4f}"
+            f"{result['final_adv_std']:>12.4f}"
+            f"{result['final_psnr_mean']:>15.4f}"
+            f"{result['final_psnr_std']:>12.4f}"
+        )
+
+    print("=" * 100)
 
 def plot_adv(results, save_dir):
 
@@ -275,7 +371,7 @@ def main():
             results[name] = load_experiment(
                 exp_dir
             )
-
+    print_summary(results)
     plot_adv(results, args.save_dir)
     plot_psnr(results, args.save_dir)
     plot_tradeoff(results, args.save_dir)
