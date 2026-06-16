@@ -83,8 +83,13 @@ def load_mean_adv_curve(args, label, fitness_type):
         adv_scores = np.array([row[0] for row in data])
         psnr_scores = np.array([row[1] for row in data])
 
+        if fitness_type == "adaptive":
+            fitness_adv_scores = np.maximum(adv_scores, 0)
+        else:
+            fitness_adv_scores = adv_scores
+
         fitness_scores = (
-            args.attack_w * adv_scores
+            args.attack_w * fitness_adv_scores
             + args.recons_w * psnr_scores
         )
 
