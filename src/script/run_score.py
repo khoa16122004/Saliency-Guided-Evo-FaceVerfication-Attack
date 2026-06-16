@@ -124,12 +124,12 @@ fig_path = os.path.join(path, "process.png")
 
 plt.figure(figsize=(8, 5))
 plt.plot(mean_curve, label="Best Adv Score")
-plt.fill_between(
-    np.arange(min_len),
-    mean_curve - std_curve,
-    mean_curve + std_curve,
-    alpha=0.2,
-)
+# plt.fill_between(
+#     np.arange(min_len),
+#     mean_curve - std_curve,
+#     mean_curve + std_curve,
+#     alpha=0.2,
+# )
 
 plt.xlabel("Iteration")
 plt.ylabel("Best Adversarial Score")
