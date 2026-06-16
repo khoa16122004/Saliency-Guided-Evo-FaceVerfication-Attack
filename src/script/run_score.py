@@ -29,6 +29,18 @@ def parse_args():
     return parser.parse_args()
 
 
+def save_curve(curve, ylabel, title, save_path):
+    plt.figure(figsize=(8, 5))
+    plt.plot(curve)
+    plt.xlabel("Iteration")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+
+
 args = parse_args()
 
 path = (
@@ -55,17 +67,20 @@ total_adv_score = 0.0
 total_psnr = 0.0
 num_samples = 0
 
-all_best_curves = []
+all_best_fitness_curves = []
+all_best_adv_curves = []
+all_best_psnr_curves = []
 
 for file_name in sorted(os.listdir(final_dir)):
     if not file_name.endswith(".txt"):
         continue
+
     final_path = os.path.join(final_dir, file_name)
     process_path = final_path.replace("final_selected", "selected")
 
-    # --------------------
+    # ==================================================
     # Final result
-    # --------------------
+    # ==================================================
     with open(final_path, "r") as f:
         adv_score, psnr_score = map(float, f.readline().strip().split())
 
@@ -77,9 +92,9 @@ for file_name in sorted(os.listdir(final_dir)):
 
     num_samples += 1
 
-    # --------------------
+    # ==================================================
     # Optimization process
-    # --------------------
+    # ==================================================
     with open(process_path, "r") as f:
         data = [
             list(map(float, line.strip().split()))
@@ -87,67 +102,108 @@ for file_name in sorted(os.listdir(final_dir)):
             if line.strip()
         ]
 
-    adv_scores = [row[0] for row in data]
+    if len(data) == 0:
+        continue
 
-    # best-so-far curve
-    best_curve = np.maximum.accumulate(adv_scores)
-    all_best_curves.append(best_curve)
+    adv_scores = np.array([row[0] for row in data])
+    psnr_scores = np.array([row[1] for row in data])
 
-# ======================
+    # fitness used during optimization
+    fitness_scores = (
+        args.attack_w * adv_scores
+        + args.recons_w * psnr_scores
+    )
+
+    best_fitness_curve = []
+    best_adv_curve = []
+    best_psnr_curve = []
+
+    best_idx = 0
+
+    for i in range(len(fitness_scores)):
+        if fitness_scores[i] > fitness_scores[best_idx]:
+            best_idx = i
+
+        best_fitness_curve.append(fitness_scores[best_idx])
+        best_adv_curve.append(adv_scores[best_idx])
+        best_psnr_curve.append(psnr_scores[best_idx])
+
+    all_best_fitness_curves.append(best_fitness_curve)
+    all_best_adv_curves.append(best_adv_curve)
+    all_best_psnr_curves.append(best_psnr_curve)
+
+# ==================================================
 # Statistics
-# ======================
+# ==================================================
 
 success_rate = success_count / num_samples
 avg_adv_score = total_adv_score / num_samples
 avg_psnr = total_psnr / num_samples
 
-print(f"Num samples : {num_samples}")
+print(f"Num Samples : {num_samples}")
 print(f"Success Rate: {success_rate:.4f}")
 print(f"Avg Adv     : {avg_adv_score:.4f}")
 print(f"Avg PSNR    : {avg_psnr:.4f}")
 
-# ======================
+# ==================================================
 # Visualization
-# ======================
+# ==================================================
 
-min_len = min(len(curve) for curve in all_best_curves)
-all_best_curves = np.array(
-    [curve[:min_len] for curve in all_best_curves]
+min_len = min(
+    min(len(curve) for curve in all_best_fitness_curves),
+    min(len(curve) for curve in all_best_adv_curves),
+    min(len(curve) for curve in all_best_psnr_curves),
 )
 
-mean_curve = all_best_curves.mean(axis=0)
-std_curve = all_best_curves.std(axis=0)
+all_best_fitness_curves = np.array(
+    [curve[:min_len] for curve in all_best_fitness_curves]
+)
 
-# ======================
-# Save process figure
-# ======================
+all_best_adv_curves = np.array(
+    [curve[:min_len] for curve in all_best_adv_curves]
+)
 
-fig_path = os.path.join(path, "process.png")
+all_best_psnr_curves = np.array(
+    [curve[:min_len] for curve in all_best_psnr_curves]
+)
 
-plt.figure(figsize=(8, 5))
-plt.plot(mean_curve, label="Best Adv Score")
-# plt.fill_between(
-#     np.arange(min_len),
-#     mean_curve - std_curve,
-#     mean_curve + std_curve,
-#     alpha=0.2,
-# )
+mean_fitness_curve = all_best_fitness_curves.mean(axis=0)
+mean_adv_curve = all_best_adv_curves.mean(axis=0)
+mean_psnr_curve = all_best_psnr_curves.mean(axis=0)
 
-plt.xlabel("Iteration")
-plt.ylabel("Best Adversarial Score")
-plt.title(f"{args.method} Optimization Process")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
+# ==================================================
+# Save figures
+# ==================================================
 
-plt.savefig(fig_path, dpi=300, bbox_inches="tight")
-plt.close()
+save_curve(
+    mean_fitness_curve,
+    ylabel="Fitness",
+    title=f"{args.method} Fitness Evolution",
+    save_path=os.path.join(path, "process_fitness.png"),
+)
 
-print(f"Saved figure to {fig_path}")
+save_curve(
+    mean_adv_curve,
+    ylabel="Adv Score",
+    title=f"{args.method} Adversarial Score Evolution",
+    save_path=os.path.join(path, "process_adv.png"),
+)
 
-# ======================
+save_curve(
+    mean_psnr_curve,
+    ylabel="PSNR",
+    title=f"{args.method} PSNR Evolution",
+    save_path=os.path.join(path, "process_psnr.png"),
+)
+
+print("Saved:")
+print(f"  {os.path.join(path, 'process_fitness.png')}")
+print(f"  {os.path.join(path, 'process_adv.png')}")
+print(f"  {os.path.join(path, 'process_psnr.png')}")
+
+# ==================================================
 # Save summary
-# ======================
+# ==================================================
 
 summary_path = os.path.join(path, "summary.txt")
 
@@ -156,5 +212,7 @@ with open(summary_path, "w") as f:
     f.write(f"Success Rate  : {success_rate:.4f}\n")
     f.write(f"Avg Adv Score : {avg_adv_score:.4f}\n")
     f.write(f"Avg PSNR      : {avg_psnr:.4f}\n")
+    f.write(f"Attack Weight : {args.attack_w}\n")
+    f.write(f"Recon Weight  : {args.recons_w}\n")
 
 print(f"Saved summary to {summary_path}")
