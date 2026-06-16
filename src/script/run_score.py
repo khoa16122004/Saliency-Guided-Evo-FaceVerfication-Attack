@@ -49,51 +49,49 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_final_statistics(exp_dir):
+def compute_final_statistics(exp_dir):
 
-    pickle_dir = os.path.join(exp_dir, "pickle")
+    selected_dir = os.path.join(exp_dir, "selected")
 
     adv_scores = []
     psnr_scores = []
 
     files = sorted(
         [
-            f for f in os.listdir(pickle_dir)
-            if f.endswith(".pkl")
+            f for f in os.listdir(selected_dir)
+            if f.startswith("selected_")
         ],
-        key=lambda x: int(x.split(".")[0])
+        key=lambda x: int(x.split("_")[1].split(".")[0])
     )
 
     for fname in files:
 
-        pkl_path = os.path.join(
-            pickle_dir,
+        filepath = os.path.join(
+            selected_dir,
             fname
         )
 
-        try:
+        with open(filepath, "r") as f:
 
-            with open(pkl_path, "rb") as f:
-                data = pkl.load(f)
+            lines = [
+                line.strip()
+                for line in f
+                if line.strip()
+            ]
 
-            adv_scores.append(
-                float(data["adv_score"])
-            )
+        if len(lines) == 0:
+            continue
 
-            psnr_scores.append(
-                float(data["pnsr_score"])
-            )
+        adv, psnr = map(
+            float,
+            lines[-1].split()
+        )
 
-        except Exception as e:
+        adv_scores.append(adv)
+        psnr_scores.append(psnr)
 
-            print(
-                f"Skip {pkl_path}: {e}"
-            )
-
-    adv_scores = np.array(adv_scores)
-    psnr_scores = np.array(psnr_scores)
-
-    success = adv_scores > 0
+    adv_scores = np.asarray(adv_scores)
+    psnr_scores = np.asarray(psnr_scores)
 
     return {
         "final_adv_mean": adv_scores.mean(),
@@ -102,8 +100,9 @@ def load_final_statistics(exp_dir):
         "final_psnr_mean": psnr_scores.mean(),
         "final_psnr_std": psnr_scores.std(),
 
-        "asr": success.mean() * 100,
-        "num_samples": len(adv_scores),
+        "asr": 100.0 * np.mean(adv_scores > 0),
+
+        "num_samples": len(adv_scores)
     }
 
 
@@ -193,7 +192,7 @@ def load_experiment(exp_dir):
         "std_psnr": all_psnr.std(axis=0),
     }
 
-    final_result = load_final_statistics(
+    final_result = compute_final_statistics(
         exp_dir
     )
     
