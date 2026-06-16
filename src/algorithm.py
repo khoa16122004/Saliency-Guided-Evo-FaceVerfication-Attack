@@ -462,15 +462,28 @@ class NSGAII:
     
     def save_best(self, P: list['Individual']) -> None:
         fitness, adv_scores, psnr_scores, _ = self.fitness.benchmark(P)
-        best_idx = torch.argmax(fitness)
+        success_mask = adv_scores > 0
+        if success_mask.any():
+            candidate_idx = torch.where(success_mask)[0]
+            local_best = torch.argmax(psnr_scores[candidate_idx])
+            best_idx = candidate_idx[local_best]
+        else:
+            best_idx = torch.argmax(adv_scores)
+
         best_patch = P[best_idx]
-        best_adv_img = self.fitness.apply_patch_to_image(best_patch.patch, best_patch.location)
-        
-        print(f"Best_adv: {adv_scores[best_idx]}, Best_psnr: {psnr_scores[best_idx]}")
-        # save_image(best_adv_img, 'process.png')
-        return best_adv_img ,adv_scores[best_idx].item(), psnr_scores[best_idx].item()
-        
-                
+
+        best_adv_img = self.fitness.apply_patch_to_image(
+            best_patch.patch,
+            best_patch.location
+        )
+
+
+        return (
+            best_adv_img,
+            adv_scores[best_idx].item(),
+            psnr_scores[best_idx].item(),
+        )
+                    
 def calculating_crowding_distance(F):
     infinity = 1e+14
 
