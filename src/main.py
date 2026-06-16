@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
         population = Population(pop_size=args.pop_size,
                                 patch_size=args.patch_size,
-                                img_shape=(160, 160),
+                                img_shape=(size, size),
                                 prob_mutate_location=args.prob_mutate_location,
                                 prob_mutate_patch=args.prob_mutate_patch,
                                 guidance=fitness.get_guidance(),
