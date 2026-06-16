@@ -48,7 +48,7 @@ if __name__ == "__main__":
     args = parse_args()
     
     # save
-    output_dir = os.path.join(args.output_dir, f"seed={args.seed}_{args.log}_{args.baseline}_niter={args.n_iter}_label={args.label}_reconsw={args.recons_w}_attackw={args.attack_w}_saliencyw={args.saliency_w}_guided={int(args.use_saliency_guidance)}_popsize={args.pop_size}_toursize={args.tourament_size}_patchsize={args.patch_size}_problocationmutate={args.prob_mutate_location}_probpatchmutate={args.prob_mutate_patch}_fitnesstype={args.fitness_type}")
+    output_dir = os.path.join(args.output_dir, args.model_name, f"seed={args.seed}_{args.log}_{args.baseline}_niter={args.n_iter}_label={args.label}_reconsw={args.recons_w}_attackw={args.attack_w}_saliencyw={args.saliency_w}_guided={int(args.use_saliency_guidance)}_popsize={args.pop_size}_toursize={args.tourament_size}_patchsize={args.patch_size}_problocationmutate={args.prob_mutate_location}_probpatchmutate={args.prob_mutate_patch}_fitnesstype={args.fitness_type}")
     output_img_dir = os.path.join(output_dir, "img")
     output_pickle_dir = os.path.join(output_dir, "pickle")
     os.makedirs(output_img_dir, exist_ok=True)
