@@ -115,6 +115,8 @@ def main(args):
         #     continue
         # i = 2
         pkl_path = os.path.join(args.result_dir, "pickle", f"{i}.pkl")
+        if os.path.isdir(pkl_path):
+            continue
 
         try:
             start = time.time()
