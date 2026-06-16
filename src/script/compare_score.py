@@ -4,6 +4,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+LABELS = [0, 1]
+FITNESS_TYPES = ["normal", "adaptive"]
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
 
@@ -46,16 +50,17 @@ def build_path(args, label, fitness_type):
     )
 
 
-def load_mean_adv_curve(args, label, fitness_type):
+def load_mean_curves(args, label, fitness_type):
     path = build_path(args, label, fitness_type)
 
     final_dir = os.path.join(path, "final_selected")
 
     if not os.path.exists(final_dir):
-        print(f"Missing: {final_dir}")
-        return None
+        print(f"[WARNING] Missing folder: {final_dir}")
+        return None, None
 
     all_best_adv_curves = []
+    all_best_psnr_curves = []
 
     for file_name in sorted(os.listdir(final_dir)):
         if not file_name.endswith(".txt"):
@@ -83,108 +88,170 @@ def load_mean_adv_curve(args, label, fitness_type):
         adv_scores = np.array([row[0] for row in data])
         psnr_scores = np.array([row[1] for row in data])
 
+        # ==================================================
+        # Fitness definition
+        # ==================================================
+
         if fitness_type == "adaptive":
-            fitness_adv_scores = np.maximum(adv_scores, 0)
+            # positive adv contributes 0
+            adv_for_fitness = np.minimum(adv_scores, 0)
         else:
-            fitness_adv_scores = adv_scores
+            adv_for_fitness = adv_scores
 
         fitness_scores = (
-            args.attack_w * fitness_adv_scores
+            args.attack_w * adv_for_fitness
             + args.recons_w * psnr_scores
         )
 
+        # ==================================================
+        # Best-so-far according to fitness
+        # ==================================================
+
         best_adv_curve = []
+        best_psnr_curve = []
+
         best_idx = 0
 
         for i in range(len(fitness_scores)):
             if fitness_scores[i] > fitness_scores[best_idx]:
                 best_idx = i
 
+            # IMPORTANT:
+            # plot REAL scores, not clipped scores
             best_adv_curve.append(
                 adv_scores[best_idx]
             )
 
+            best_psnr_curve.append(
+                psnr_scores[best_idx]
+            )
+
         all_best_adv_curves.append(best_adv_curve)
+        all_best_psnr_curves.append(best_psnr_curve)
 
     if len(all_best_adv_curves) == 0:
-        return None
+        return None, None
 
     min_len = min(
-        len(curve)
-        for curve in all_best_adv_curves
+        min(len(c) for c in all_best_adv_curves),
+        min(len(c) for c in all_best_psnr_curves),
     )
 
-    curves = np.array([
-        curve[:min_len]
-        for curve in all_best_adv_curves
+    adv_curves = np.array([
+        c[:min_len]
+        for c in all_best_adv_curves
     ])
 
-    return curves.mean(axis=0)
+    psnr_curves = np.array([
+        c[:min_len]
+        for c in all_best_psnr_curves
+    ])
+
+    mean_adv_curve = adv_curves.mean(axis=0)
+    mean_psnr_curve = psnr_curves.mean(axis=0)
+
+    return mean_adv_curve, mean_psnr_curve
+
+
+def plot_metric_comparison(
+    args,
+    metric_name,
+    save_path,
+    curve_loader,
+):
+    fig, axes = plt.subplots(
+        1,
+        len(LABELS),
+        figsize=(12, 5),
+        sharey=True,
+    )
+
+    if len(LABELS) == 1:
+        axes = [axes]
+
+    for ax, label in zip(axes, LABELS):
+
+        for fitness_type in FITNESS_TYPES:
+
+            adv_curve, psnr_curve = curve_loader(
+                args,
+                label,
+                fitness_type,
+            )
+
+            if adv_curve is None:
+                continue
+
+            curve = (
+                adv_curve
+                if metric_name == "Adv Score"
+                else psnr_curve
+            )
+
+            ax.plot(
+                curve,
+                linewidth=2,
+                label=fitness_type.capitalize(),
+            )
+
+        ax.set_title(f"Label {label}")
+        ax.set_xlabel("Iteration")
+        ax.grid(True)
+
+        if metric_name == "Adv Score":
+            ax.set_ylabel("Adv Score")
+        else:
+            ax.set_ylabel("PSNR")
+
+        ax.legend()
+
+    plt.suptitle(
+        f"{args.method}: Normal vs Adaptive ({metric_name})"
+    )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        save_path,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    plt.close()
+
+    print(f"Saved: {save_path}")
 
 
 def main():
     args = parse_args()
 
-    labels = [0, 1]
-    fitness_types = ["normal", "adaptive"]
-
-    fig, axes = plt.subplots(
-        1,
-        len(labels),
-        figsize=(12, 5),
-        sharey=True
-    )
-
-    if len(labels) == 1:
-        axes = [axes]
-
-    for ax, label in zip(axes, labels):
-
-        for fitness_type in fitness_types:
-
-            curve = load_mean_adv_curve(
-                args,
-                label,
-                fitness_type
-            )
-
-            if curve is None:
-                continue
-
-            ax.plot(
-                curve,
-                linewidth=2,
-                label=fitness_type.capitalize()
-            )
-
-        ax.set_title(f"Label {label}")
-        ax.set_xlabel("Iteration")
-        ax.set_ylabel("Adv Score")
-        ax.grid(True)
-        ax.legend()
-
-    plt.suptitle(
-        f"{args.method}: Normal vs Adaptive Fitness"
-    )
-
-    plt.tight_layout()
-
-    save_path = (
-        f"comparison_"
+    adv_save_path = (
+        f"comparison_adv_"
         f"{args.method}_"
-        f"reconsw={args.recons_w}_"
-        f"attackw={args.attack_w}.png"
+        f"rw={args.recons_w}_"
+        f"aw={args.attack_w}.png"
     )
 
-    plt.savefig(
-        save_path,
-        dpi=300,
-        bbox_inches="tight"
+    psnr_save_path = (
+        f"comparison_psnr_"
+        f"{args.method}_"
+        f"rw={args.recons_w}_"
+        f"aw={args.attack_w}.png"
     )
 
-    plt.close()
+    plot_metric_comparison(
+        args=args,
+        metric_name="Adv Score",
+        save_path=adv_save_path,
+        curve_loader=load_mean_curves,
+    )
 
-    print(f"Saved to: {save_path}")
+    plot_metric_comparison(
+        args=args,
+        metric_name="PSNR",
+        save_path=psnr_save_path,
+        curve_loader=load_mean_curves,
+    )
 
 
 if __name__ == "__main__":
