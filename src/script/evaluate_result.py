@@ -128,8 +128,9 @@ def main(args):
         
         print("Save results")
         # selected_i.txt  
-        output_seleted_file = os.path.join(args.output_seleted_dir, f"selected_{i}.txt")      
-        output_final_selected_file = os.path.join(args.output_final_seleted_dir, f"final_selected_{i}.txt")
+        print(ouptut_selected_dir)
+        output_seleted_file = os.path.join(ouptut_selected_dir, f"selected_{i}.txt")      
+        output_final_selected_file = os.path.join(ouptut_final_selected_dir, f"final_selected_{i}.txt")
         with open(output_seleted_file, "w") as f:
             for adv_score, psnr_score in zip(adv_scores_log, psnr_scores_log):
                 f.write(f"{adv_score} {psnr_score}\n")
