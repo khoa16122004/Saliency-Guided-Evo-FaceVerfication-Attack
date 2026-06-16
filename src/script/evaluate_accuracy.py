@@ -3,11 +3,13 @@ import json
 import os
 import sys
 from tqdm import tqdm
-
 CURRENT_DIR = os.path.dirname(__file__)
 SRC_DIR = os.path.dirname(CURRENT_DIR)
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
+    
+from constant import MODEL_RESIZE
+
 
 import torch
 import torch.nn.functional as F
@@ -131,7 +133,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     model = get_model(args.model_name)
-    print(model)
+    size = MODEL_RESIZE[args.model_name]
     device = resolve_device(model, args.device)
     model = model.to(device).eval()
 
@@ -146,7 +148,7 @@ def main():
         model=model,
         dataset=dataset,
         threshold=args.threshold,
-        image_size=args.image_size,
+        image_size=size,
         device=device,
     )
     write_summary(args.output_dir, summary)

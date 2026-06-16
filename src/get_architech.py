@@ -31,7 +31,6 @@ def get_model(model_name):
    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch_pack = torch.load(cp_pack, map_location=device)
-    print(torch_pack.keys())
     model.load_state_dict(torch_pack)
     
     return model.eval().to(device)

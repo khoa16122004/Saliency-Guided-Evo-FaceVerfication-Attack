@@ -61,7 +61,7 @@ if __name__ == "__main__":
                transform=None)
     
     toTensor = transforms.ToTensor()
-    
+    size = MODEL_RESIZE[args.model_name]
     success_rate = 0
     results = []
    
@@ -78,7 +78,8 @@ if __name__ == "__main__":
         
         random.seed(args.seed)
         img1, img2, label = DATA[i]
-        img1, img2 = img1.resize((160, 160)), img2.resize((160, 160))
+        
+        img1, img2 = img1.resize((size, size)), img2.resize((size, size))
         
         img1_torch, img2_torch = toTensor(img1), toTensor(img2)
         img1_feature = MODEL(img1_torch.unsqueeze(0).cuda())
