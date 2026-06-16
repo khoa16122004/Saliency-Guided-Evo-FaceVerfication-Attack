@@ -829,6 +829,9 @@ class IResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
+        # normalize
+        x = (x - 0.5) / 0.5 
+        
         with torch.cuda.amp.autocast(self.fp16):
             x = self.conv1(x)
             x = self.bn1(x)

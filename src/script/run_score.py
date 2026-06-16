@@ -108,32 +108,12 @@ for file_name in sorted(os.listdir(final_dir)):
     if len(data) == 0:
         continue
 
-    adv_scores = np.array([row[0] for row in data])
-    psnr_scores = np.array([row[1] for row in data])
+    adv_scores = np.array([row[0] for row in data]) # curve
+    psnr_scores = np.array([row[1] for row in data]) # curve
+    print(adv_score.shape)
+    raise
 
-    # fitness used during optimization
-    fitness_scores = (
-        args.attack_w * adv_scores
-        + args.recons_w * psnr_scores
-    )
-
-    best_fitness_curve = []
-    best_adv_curve = []
-    best_psnr_curve = []
-
-    best_idx = 0
-
-    for i in range(len(fitness_scores)):
-        if fitness_scores[i] > fitness_scores[best_idx]:
-            best_idx = i
-
-        best_fitness_curve.append(fitness_scores[best_idx])
-        best_adv_curve.append(adv_scores[best_idx])
-        best_psnr_curve.append(psnr_scores[best_idx])
-
-    all_best_fitness_curves.append(best_fitness_curve)
-    all_best_adv_curves.append(best_adv_curve)
-    all_best_psnr_curves.append(best_psnr_curve)
+  
 
 # ==================================================
 # Statistics
