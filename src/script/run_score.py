@@ -110,7 +110,7 @@ for file_name in sorted(os.listdir(final_dir)):
 
     adv_scores = np.array([row[0] for row in data]) # curve
     psnr_scores = np.array([row[1] for row in data]) # curve
-    print(adv_score.shape)
+    print(adv_scores.shape)
     raise
 
   
