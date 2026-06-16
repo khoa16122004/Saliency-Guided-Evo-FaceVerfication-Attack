@@ -404,7 +404,8 @@ def main():
             exp_dir = build_exp_dir(
                 args,
                 method,
-                fitness_type
+                fitness_type,
+                args.label
             )
 
             if not os.path.exists(exp_dir):
