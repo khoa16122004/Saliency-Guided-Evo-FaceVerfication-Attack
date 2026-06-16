@@ -3,9 +3,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-label = [0, 1]
-method = ['GA']
-fitness_type = ['normal', 'adaptive']
+
 
 
 
@@ -18,7 +16,7 @@ def parse_args():
     parser.add_argument("--recons_w", type=float, default=0.5)
     parser.add_argument("--attack_w", type=float, default=0.5)
     parser.add_argument("--saliency_w", type=float, default=0.0)
-
+    parser.add_argument("--label", type=int, choices=[0, 1], default=0)
     parser.add_argument("--fitness_type", type=str, default="normal")
 
     parser.add_argument("--niter", type=int, default=1000)
