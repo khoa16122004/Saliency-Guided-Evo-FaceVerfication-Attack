@@ -140,8 +140,8 @@ def main(args):
 if __name__ == "__main__":    
     parser = argparse.ArgumentParser()
     parser.add_argument("--pkl_dir", type=str, required=True)
-    parser.add_argument("--output_seleted_dir", type=str, required=True)
-    parser.add_argument("--output_final_seleted_dir", type=str, required=True)
+    parser.add_argument("--output_seleted_dir", type=str, default="process_result/selected")
+    parser.add_argument("--output_final_seleted_dir", type=str, default="process_result/final_selected")
     parser.add_argument("--algorithm", type=str, required=True)
     args = parser.parse_args()
     main(args)
