@@ -155,66 +155,41 @@ class Individual:
             self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
         
         elif self.mutate_mode == "multiple_rectangles":
-            n_rects = torch.randint(
-                low=10,
-                high=50,
-                size=(1,),
-                device=self.device
-            ).item()
+            H = W = self.patch_size
 
-            # kích thước rectangle
-            widths = torch.randint(
-                low=2,
-                high=max(3, self.patch_size // 4),
-                size=(n_rects,),
-                device=self.device
+            n_rects = 30
+
+            xs = torch.randint(0, W, (n_rects,), device=self.device)
+            ys = torch.randint(0, H, (n_rects,), device=self.device)
+
+            ws = torch.randint(2, W // 4, (n_rects,), device=self.device)
+            hs = torch.randint(2, H // 4, (n_rects,), device=self.device)
+
+            ws = torch.minimum(ws, W - xs)
+            hs = torch.minimum(hs, H - ys)
+
+            colors = torch.rand(n_rects, 3, device=self.device)
+            alphas = 0.05 + 0.45 * torch.rand(n_rects, device=self.device)
+
+            X = torch.arange(W, device=self.device).view(1, 1, W)
+            Y = torch.arange(H, device=self.device).view(1, H, 1)
+
+            mask = (
+                (X >= xs[:, None, None]) &
+                (X < (xs + ws)[:, None, None]) &
+                (Y >= ys[:, None, None]) &
+                (Y < (ys + hs)[:, None, None])
+            ).float()
+
+            contribution = torch.einsum(
+                "nhw,nc,n->chw",
+                mask,
+                colors,
+                alphas
             )
 
-            heights = torch.randint(
-                low=2,
-                high=max(3, self.patch_size // 4),
-                size=(n_rects,),
-                device=self.device
-            )
-
-            # màu RGB
-            colors = torch.rand(
-                n_rects,
-                3,
-                device=self.device
-            )
-
-            # độ mạnh khi cộng vào
-            alphas = 0.05 + 0.45 * torch.rand(
-                n_rects,
-                device=self.device
-            )
-
-            for i in range(n_rects):
-
-                w = widths[i].item()
-                h = heights[i].item()
-
-                x = torch.randint(
-                    0,
-                    self.patch_size - w + 1,
-                    (1,),
-                    device=self.device
-                ).item()
-
-                y = torch.randint(
-                    0,
-                    self.patch_size - h + 1,
-                    (1,),
-                    device=self.device
-                ).item()
-
-                color = colors[i].view(3, 1, 1)
-                alpha = alphas[i]
-
-                self.patch[:, x:x+w, y:y+h] += alpha * color
-
-            self.patch.clamp_(0.0, 1.0)            
+            self.patch.add_(contribution)
+        self.patch.clamp_(0.0, 1.0)     
 
 
         
