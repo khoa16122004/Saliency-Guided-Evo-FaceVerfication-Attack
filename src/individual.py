@@ -3,11 +3,11 @@ import torch
 from torchvision.utils import save_image
 
 class Individual:
-    def __init__(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, guidance: dict | None = None, use_saliency_guidance: bool = False, saliency_noise_scale: float = 0.15) -> None:
+    def __init__(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, guidance: dict | None = None, use_saliency_guidance: bool = False, saliency_noise_scale: float = 0.15, mutate_mode: str = "single_rectangle") -> None:
         """
         Initialize an individual with a random patch and location.
         """
-        self.patch_size = patch_size
+        self.patch_size = patch_size 
         self.img_shape = img_shape
         self.prob_mutate_patch = prob_mutate_patch
         self.prob_mutate_location = prob_mutate_location
@@ -17,6 +17,8 @@ class Individual:
         self.rank = None
         self.crowding = None
         self.device = self._resolve_device()
+        
+        self.mutate_mode = mutate_mode
         
         self._random_location()
         self._random_patch()
@@ -142,12 +144,80 @@ class Individual:
         """
         Add a rectangle to the patch.
         """
-        x_min = random.randint(0, self.patch_size - 1)
-        y_min = random.randint(0, self.patch_size - 1)
-        width = random.randint(2, 5)
-        color = torch.rand(3, device=self.device)  # Random RGB color
+        
+        if self.mutate_mode == "single_rectangle":     
+            x_min = random.randint(0, self.patch_size - 1)
+            y_min = random.randint(0, self.patch_size - 1)
+            width = random.randint(2, 5)
+            color = torch.rand(3, device=self.device)  # Random RGB color
 
-        self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
+            self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
+        
+        elif self.mutate_mode == "multiple_rectangles":
+            n_rects = torch.randint(
+                low=10,
+                high=50,
+                size=(1,),
+                device=self.device
+            ).item()
+
+            # kích thước rectangle
+            widths = torch.randint(
+                low=2,
+                high=max(3, self.patch_size // 4),
+                size=(n_rects,),
+                device=self.device
+            )
+
+            heights = torch.randint(
+                low=2,
+                high=max(3, self.patch_size // 4),
+                size=(n_rects,),
+                device=self.device
+            )
+
+            # màu RGB
+            colors = torch.rand(
+                n_rects,
+                3,
+                device=self.device
+            )
+
+            # độ mạnh khi cộng vào
+            alphas = 0.05 + 0.45 * torch.rand(
+                n_rects,
+                device=self.device
+            )
+
+            for i in range(n_rects):
+
+                w = widths[i].item()
+                h = heights[i].item()
+
+                x = torch.randint(
+                    0,
+                    self.patch_size - w + 1,
+                    (1,),
+                    device=self.device
+                ).item()
+
+                y = torch.randint(
+                    0,
+                    self.patch_size - h + 1,
+                    (1,),
+                    device=self.device
+                ).item()
+
+                color = colors[i].view(3, 1, 1)
+                alpha = alphas[i]
+
+                self.patch[:, x:x+w, y:y+h] += alpha * color
+
+            self.patch.clamp_(0.0, 1.0)            
+
+
+        
+    
     
 
     def crossover_UX(self, parent2: 'Individual') -> tuple['Individual', 'Individual']:

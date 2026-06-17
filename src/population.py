@@ -6,7 +6,8 @@ class Population:
                  prob_mutate_patch: float, prob_mutate_location: float,
                  guidance: dict | None = None,
                  use_saliency_guidance: bool = False,
-                 saliency_noise_scale: float = 0.15) -> None:
+                 saliency_noise_scale: float = 0.15,
+                 mutate_mode: str = "single_rectangle") -> None:
         
         self.pop_size = pop_size
         self.patch_size = patch_size
@@ -16,10 +17,11 @@ class Population:
         self.guidance = guidance
         self.use_saliency_guidance = use_saliency_guidance
         self.saliency_noise_scale = saliency_noise_scale
+        self.mutate_mode = mutate_mode
         
-        self._create_population(patch_size, img_shape, prob_mutate_patch, prob_mutate_location)
+        self._create_population(patch_size, img_shape, prob_mutate_patch, prob_mutate_location, mutate_mode=self.mutate_mode)
         
-    def _create_population(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float) -> None:
+    def _create_population(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, mutate_mode: str) -> None:
         self.P = [
             Individual(
                 patch_size,
@@ -29,6 +31,7 @@ class Population:
                 guidance=self.guidance,
                 use_saliency_guidance=self.use_saliency_guidance,
                 saliency_noise_scale=self.saliency_noise_scale,
+                mutate_mode=mutate_mode
             )
             for _ in range(self.pop_size)
         ]

@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument('--patch_size', type=int, default=16, help="Size of the patch")
     parser.add_argument('--prob_mutate_location', type=float, default=0.2, help="Probability of mutating the patch location")
     parser.add_argument('--prob_mutate_patch', type=float, default=0.9, help="Probability of mutating the patch itself")
+    parser.add_argument('--mutate_mode', type=str, choices=['single_rectangle', 'multiple_rectangles'], default="single_rectangle", help="Mode of mutation for the patch")
     parser.add_argument('--n_iter', type=int, default=1000, help="Number of iterations for the genetic algorithm")
     parser.add_argument('--tourament_size', type=int, default=4, help="Tournament size for selection")
     parser.add_argument('--recons_w', type=float, default=0.5, help="Weight for reconstruction fitness")
@@ -48,7 +49,7 @@ if __name__ == "__main__":
     args = parse_args()
     
     # save
-    output_dir = os.path.join(args.output_dir, args.model_name, f"seed={args.seed}_{args.log}_{args.baseline}_niter={args.n_iter}_label={args.label}_reconsw={args.recons_w}_attackw={args.attack_w}_saliencyw={args.saliency_w}_guided={int(args.use_saliency_guidance)}_popsize={args.pop_size}_toursize={args.tourament_size}_patchsize={args.patch_size}_problocationmutate={args.prob_mutate_location}_probpatchmutate={args.prob_mutate_patch}_fitnesstype={args.fitness_type}")
+    output_dir = os.path.join(args.output_dir, args.model_name, f"seed={args.seed}_{args.log}_{args.baseline}_niter={args.n_iter}_label={args.label}_reconsw={args.recons_w}_attackw={args.attack_w}_saliencyw={args.saliency_w}_guided={int(args.use_saliency_guidance)}_popsize={args.pop_size}_toursize={args.tourament_size}_patchsize={args.patch_size}_problocationmutate={args.prob_mutate_location}_probpatchmutate={args.prob_mutate_patch}_fitnesstype={args.fitness_type}_mutatemode={args.mutate_mode}")
     output_img_dir = os.path.join(output_dir, "img")
     output_pickle_dir = os.path.join(output_dir, "pickle")
     os.makedirs(output_img_dir, exist_ok=True)
@@ -104,7 +105,8 @@ if __name__ == "__main__":
                                 prob_mutate_patch=args.prob_mutate_patch,
                                 guidance=fitness.get_guidance(),
                                 use_saliency_guidance=args.use_saliency_guidance,
-                                saliency_noise_scale=args.saliency_noise_scale)
+                                saliency_noise_scale=args.saliency_noise_scale,
+                                mutate_mode=args.mutate_mode)
         
        
         best_psnr_success = None
