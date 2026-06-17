@@ -145,9 +145,6 @@ class Individual:
         """
         Add a rectangle to the patch.
         """
-        print("Adding rectangle mutation...")
-        print(self.mutate_mode)
-        raise
         
         if self.mutate_mode == "single_rectangle":     
             x_min = random.randint(0, self.patch_size - 1)
