@@ -154,6 +154,7 @@ class Individual:
             self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
         
         elif self.mutate_mode == "multiple_rectangles":
+            print("Mutating with multiple rectangles...")
             n_rects = torch.randint(
                 low=10,
                 high=50,
