@@ -155,7 +155,7 @@ class Individual:
             self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
         
         elif self.mutate_mode == "multiple_rectangles":
-            num_rectangles = random.randint(1, 3)  # Randomly choose how many rectangles to add
+            num_rectangles = random.randint(1, 10)  # Randomly choose how many rectangles to add
             for _ in range(num_rectangles):
                 x_min = random.randint(0, self.patch_size - 1)
                 y_min = random.randint(0, self.patch_size - 1)
