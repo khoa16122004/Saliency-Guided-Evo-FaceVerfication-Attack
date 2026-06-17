@@ -156,30 +156,67 @@ class Individual:
         
         elif self.mutate_mode == "multiple_rectangles":
 
+            H = W = self.patch_size
+
             n_rects = torch.randint(
-                1, 10, (1,), device=self.device
+                20, 50, (1,),
+                device=self.device
             ).item()
 
-            widths = torch.randint(
-                2, 5, (n_rects,), device=self.device
+            # multi-scale rectangles
+            r = torch.rand(n_rects, device=self.device)
+
+            small = torch.randint(
+                2, 6,
+                (n_rects,),
+                device=self.device
             )
 
-            heights = torch.randint(
-                2, 5, (n_rects,), device=self.device
+            medium = torch.randint(
+                6, 12,
+                (n_rects,),
+                device=self.device
+            )
+
+            large = torch.randint(
+                12,
+                max(13, self.patch_size // 2),
+                (n_rects,),
+                device=self.device
+            )
+
+            widths = torch.where(
+                r < 0.7,
+                small,
+                torch.where(r < 0.95, medium, large)
+            )
+
+            heights = torch.where(
+                r < 0.7,
+                small,
+                torch.where(r < 0.95, medium, large)
             )
 
             xs = torch.randint(
-                0,
-                self.patch_size - widths.max() + 1,
+                0, H,
                 (n_rects,),
                 device=self.device
             )
 
             ys = torch.randint(
-                0,
-                self.patch_size - heights.max() + 1,
+                0, W,
                 (n_rects,),
                 device=self.device
+            )
+
+            widths = torch.minimum(
+                widths,
+                torch.tensor(H, device=self.device) - xs
+            )
+
+            heights = torch.minimum(
+                heights,
+                torch.tensor(W, device=self.device) - ys
             )
 
             colors = torch.rand(
@@ -187,35 +224,42 @@ class Individual:
                 device=self.device
             )
 
-            alphas = 0.05 + 0.45 * torch.rand(
-                n_rects,
-                device=self.device
+            alphas = (
+                torch.rand(
+                    n_rects, 1,
+                    device=self.device
+                ) * 0.5 + 0.2
             )
 
-            H = W = self.patch_size
+            yy = torch.arange(
+                H,
+                device=self.device
+            ).view(1, H, 1)
 
-            yy = torch.arange(H, device=self.device).view(1, H, 1)
-            xx = torch.arange(W, device=self.device).view(1, 1, W)
+            xx = torch.arange(
+                W,
+                device=self.device
+            ).view(1, 1, W)
 
-            mask = (
+            masks = (
                 (yy >= ys[:, None, None]) &
                 (yy < (ys + heights)[:, None, None]) &
                 (xx >= xs[:, None, None]) &
                 (xx < (xs + widths)[:, None, None])
-            )  # (N,H,W)
+            ).float()
 
+            # (N,3,1,1)
             rect_values = (
-                alphas[:, None] * colors
+                colors * alphas
             ).view(n_rects, 3, 1, 1)
 
             delta = (
-                mask[:, None, :, :] *
+                masks[:, None] *
                 rect_values
             ).sum(dim=0)
 
             self.patch.add_(delta)
             self.patch.clamp_(0.0, 1.0)
-
         
     
     
