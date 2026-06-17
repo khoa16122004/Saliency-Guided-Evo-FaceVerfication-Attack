@@ -18,8 +18,10 @@ class Individual:
         self.crowding = None
         self.device = self._resolve_device()
         
-        self.mutate_mode = mutate_mode
         
+        self.mutate_mode = mutate_mode
+        print(self.mutate_mode)
+        raise
         self._random_location()
         self._random_patch()
         
