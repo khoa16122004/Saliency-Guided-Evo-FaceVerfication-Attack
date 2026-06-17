@@ -20,6 +20,7 @@ class Individual:
         
         
         self.mutate_mode = mutate_mode
+        print(f"Mutate mode: {self.mutate_mode}")
         self._random_location()
         self._random_patch()
         
