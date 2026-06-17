@@ -155,42 +155,66 @@ class Individual:
             self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
         
         elif self.mutate_mode == "multiple_rectangles":
-            H = W = self.patch_size
 
-            n_rects = 30
+            n_rects = torch.randint(
+                1, 10, (1,), device=self.device
+            ).item()
 
-            xs = torch.randint(0, W, (n_rects,), device=self.device)
-            ys = torch.randint(0, H, (n_rects,), device=self.device)
-
-            ws = torch.randint(2, W // 4, (n_rects,), device=self.device)
-            hs = torch.randint(2, H // 4, (n_rects,), device=self.device)
-
-            ws = torch.minimum(ws, W - xs)
-            hs = torch.minimum(hs, H - ys)
-
-            colors = torch.rand(n_rects, 3, device=self.device)
-            alphas = 0.05 + 0.45 * torch.rand(n_rects, device=self.device)
-
-            X = torch.arange(W, device=self.device).view(1, 1, W)
-            Y = torch.arange(H, device=self.device).view(1, H, 1)
-
-            mask = (
-                (X >= xs[:, None, None]) &
-                (X < (xs + ws)[:, None, None]) &
-                (Y >= ys[:, None, None]) &
-                (Y < (ys + hs)[:, None, None])
-            ).float()
-
-            contribution = torch.einsum(
-                "nhw,nc,n->chw",
-                mask,
-                colors,
-                alphas
+            widths = torch.randint(
+                2, 5, (n_rects,), device=self.device
             )
 
-            self.patch.add_(contribution)
-        self.patch.clamp_(0.0, 1.0)     
+            heights = torch.randint(
+                2, 5, (n_rects,), device=self.device
+            )
 
+            xs = torch.randint(
+                0,
+                self.patch_size - widths.max() + 1,
+                (n_rects,),
+                device=self.device
+            )
+
+            ys = torch.randint(
+                0,
+                self.patch_size - heights.max() + 1,
+                (n_rects,),
+                device=self.device
+            )
+
+            colors = torch.rand(
+                n_rects, 3,
+                device=self.device
+            )
+
+            alphas = 0.05 + 0.45 * torch.rand(
+                n_rects,
+                device=self.device
+            )
+
+            H = W = self.patch_size
+
+            yy = torch.arange(H, device=self.device).view(1, H, 1)
+            xx = torch.arange(W, device=self.device).view(1, 1, W)
+
+            mask = (
+                (yy >= ys[:, None, None]) &
+                (yy < (ys + heights)[:, None, None]) &
+                (xx >= xs[:, None, None]) &
+                (xx < (xs + widths)[:, None, None])
+            )  # (N,H,W)
+
+            rect_values = (
+                alphas[:, None] * colors
+            ).view(n_rects, 3, 1, 1)
+
+            delta = (
+                mask[:, None, :, :] *
+                rect_values
+            ).sum(dim=0)
+
+            self.patch.add_(delta)
+            self.patch.clamp_(0.0, 1.0)
 
         
     
