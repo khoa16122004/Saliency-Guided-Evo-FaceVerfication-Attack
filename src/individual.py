@@ -42,6 +42,7 @@ class Individual:
             guidance=self.guidance,
             use_saliency_guidance=self.use_saliency_guidance,
             saliency_noise_scale=self.saliency_noise_scale,
+            mutate_mode=self.mutate_mode
         )
 
     def _location_from_start(self, x_min: int, y_min: int) -> tuple[int, int, int, int]:
