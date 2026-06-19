@@ -97,6 +97,19 @@ def build_exp_dir(
         f"_fitnesstype={fitness_type}"
     )
 
+
+def resolve_exp_dir(exp_dir):
+
+    if os.path.exists(exp_dir):
+        return exp_dir
+
+    exp_dir_mutate_mode = f"{exp_dir}_mutatemode=single_rectangle"
+
+    if os.path.exists(exp_dir_mutate_mode):
+        return exp_dir_mutate_mode
+
+    return None
+
 def merge_results(result_list):
 
     all_adv = []
@@ -522,7 +535,9 @@ def main():
                     label
                 )
 
-                if not os.path.exists(exp_dir):
+                resolved_exp_dir = resolve_exp_dir(exp_dir)
+
+                if resolved_exp_dir is None:
 
                     print(
                         f"Skip: {exp_dir}"
@@ -534,7 +549,7 @@ def main():
 
                     loaded_results.append(
                         load_experiment(
-                            exp_dir
+                            resolved_exp_dir
                         )
                     )
 
@@ -585,7 +600,9 @@ def main():
                     label
                 )
 
-                if not os.path.exists(exp_dir):
+                resolved_exp_dir = resolve_exp_dir(exp_dir)
+
+                if resolved_exp_dir is None:
 
                     print(
                         f"Skip: {exp_dir}"
@@ -597,7 +614,7 @@ def main():
 
                     loaded_results.append(
                         load_experiment(
-                            exp_dir
+                            resolved_exp_dir
                         )
                     )
 
