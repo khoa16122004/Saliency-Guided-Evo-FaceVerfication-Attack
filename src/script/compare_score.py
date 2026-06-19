@@ -101,6 +101,8 @@ def merge_results(result_list):
 
     all_adv = []
     all_psnr = []
+    all_final_adv = []
+    all_final_psnr = []
 
     for result in result_list:
 
@@ -109,6 +111,9 @@ def merge_results(result_list):
 
         for curve in result["all_psnr"]:
             all_psnr.append(curve)
+
+        all_final_adv.extend(list(result["final_adv_scores"]))
+        all_final_psnr.extend(list(result["final_psnr_scores"]))
 
     min_len = min(len(x) for x in all_adv)
 
@@ -120,6 +125,9 @@ def merge_results(result_list):
         [x[:min_len] for x in all_psnr]
     )
 
+    all_final_adv = np.asarray(all_final_adv)
+    all_final_psnr = np.asarray(all_final_psnr)
+
     return {
         "mean_adv": all_adv.mean(axis=0),
         "std_adv": all_adv.std(axis=0),
@@ -128,6 +136,17 @@ def merge_results(result_list):
         "std_psnr": all_psnr.std(axis=0),
 
         "num_samples": len(all_adv),
+
+        "final_adv_mean": all_final_adv.mean(),
+        "final_adv_std": all_final_adv.std(),
+
+        "final_psnr_mean": all_final_psnr.mean(),
+        "final_psnr_std": all_final_psnr.std(),
+
+        "asr": 100.0 * np.mean(all_final_adv > 0),
+
+        "final_adv_scores": all_final_adv,
+        "final_psnr_scores": all_final_psnr,
 
         # giữ raw để merge tiếp nếu cần
         "all_adv": all_adv,
@@ -244,14 +263,15 @@ def compute_final_statistics(exp_dir):
         "final_psnr_std": psnr_scores.std(),
 
         "asr": 100.0 * np.mean(adv_scores > 0),
+
+        "final_adv_scores": adv_scores,
+        "final_psnr_scores": psnr_scores,
     }
 
 
 def load_experiment(exp_dir):
 
     selected_dir = os.path.join(exp_dir, "selected")
-    final_selected = os.path.join(exp_dir, "final_selected")
-    #
 
     if not os.path.exists(selected_dir):
         raise FileNotFoundError(selected_dir)
