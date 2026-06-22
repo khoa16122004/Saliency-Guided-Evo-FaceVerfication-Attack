@@ -528,95 +528,125 @@ def calculating_crowding_distance(F):
     # replace infinity with a large number
     crowding[np.isinf(crowding)] = infinity
     return crowding
+
+
+
 class LOAP:
     def __init__(self, n_iter: int,
-                 population: 'Population',
                  fitness: 'Fitness',
-                 tourament_size: int,
-                 interval_update: int,
-                 crossover_type: str,
                  epsilon: float = 0.05,
                  stride: int = 1,
                  optimize_location: bool = True,
                  optimize_location_type: str = 'full',
-                 signed_grad: bool = True):
+                 signed_grad: bool = True,
+                 track_best: bool = True,
+                 print_iter: bool = False,
+                 print_every: int = 1):
         self.n_iter = n_iter
-        self.pop = population
-        self.args = self.pop.get_params
-        self.tourament_size = tourament_size
         self.fitness = fitness
-        self.interval_update = interval_update
-        self.crossover_type = crossover_type
         self.epsilon = epsilon
         self.stride = stride
         self.optimize_location = optimize_location
         self.optimize_location_type = optimize_location_type
         self.signed_grad = signed_grad
+        self.track_best = track_best
+        self.print_iter = print_iter
+        self.print_every = max(1, print_every)
         self.arkive = []
+        _, self.img_h, self.img_w = self.fitness.img1.shape
+        self.patch_size = self.fitness.patch_size
 
-    def solve(self):
-        for ind in self.pop.P:
-            ind.patch = ind.patch.to(self.fitness.device)
+    def solve(self, sample_idx: int | None = None):
+        patch = torch.rand(
+            3,
+            self.patch_size,
+            self.patch_size,
+            device=self.fitness.device,
+        )
+        location = self._random_location()
+
+        best_patch = patch.clone()
+        best_location = location
+        best_adv = self._attack_score(best_patch, best_location)
 
         for i in tqdm(range(self.n_iter)):
-            for ind in self.pop.P:
-                self._update_patch(ind)
-                if self.optimize_location:
-                    self.next_location(ind)
+            current_loss = self._attack_score(patch, location)
+            patch = self._update_patch(patch, location)
+            if self.optimize_location:
+                location = self.next_location(patch, location, current_loss)
 
-            self._log_iteration(self.pop.P)
+            updated_adv = self._attack_score(patch, location)
+            if updated_adv > best_adv:
+                best_adv = updated_adv
+                best_patch = patch.clone()
+                best_location = location
 
-            if self.has_converged(self.pop.P):
-                print(f"Convergence reached at iteration {i+1}. Terminating early.")
-                break
+            if self.print_iter and ((i + 1) % self.print_every == 0 or i == 0):
+                prefix = f"[Sample {sample_idx}] " if sample_idx is not None else ""
+                print(
+                    f"{prefix}Iter {i+1}/{self.n_iter} | "
+                    f"loss_before={current_loss:.6f} | "
+                    f"score_after={updated_adv:.6f} | "
+                    f"best={best_adv:.6f} | "
+                    f"loc={location}"
+                )
 
-        adv_img, adv_score, psnr_score = self.save_best(self.pop.P)
-        return self.pop.P, adv_img, adv_score, psnr_score, self.arkive
+            self._log_iteration(updated_adv, location)
 
-    def _update_patch(self, individual: 'Individual') -> None:
+        if self.track_best:
+            final_patch = best_patch
+            final_location = best_location
+            final_adv = best_adv
+        else:
+            final_patch = patch
+            final_location = location
+            final_adv = self._attack_score(patch, location)
+
+        adv_img = self.fitness.apply_patch_to_image(final_patch, final_location)
+        psnr_score = self._single_psnr(adv_img)
+        return final_patch, final_location, adv_img, final_adv, psnr_score, self.arkive
+
+    def _update_patch(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> torch.Tensor:
         self.fitness.model.zero_grad(set_to_none=True)
 
-        patch = individual.patch.detach().clone().requires_grad_(True)
+        patch_var = patch.detach().clone().requires_grad_(True)
         adv_objective = self.fitness.evaluate_adv_single_with_grad(
-            patch,
-            individual.location,
+            patch_var,
+            location,
         )
         adv_objective.backward()
 
-        grad = patch.grad
+        grad = patch_var.grad
         if grad is None:
-            return
+            return patch
 
         if self.signed_grad:
             grad = torch.sign(grad)
 
-        updated_patch = torch.clamp(patch + self.epsilon * grad, 0.0, 1.0).detach()
-        individual.patch = updated_patch
+        return torch.clamp(patch_var + self.epsilon * grad, 0.0, 1.0).detach()
 
-    def next_location(self, individual: 'Individual') -> None:
+    def next_location(self, patch: torch.Tensor, location: tuple[int, int, int, int], current_loss: float) -> tuple[int, int, int, int]:
         directions = ['up', 'down', 'left', 'right']
         if self.optimize_location_type == 'random':
             directions = [random.choice(directions)]
 
-        best_location = individual.location
-        best_score = self._attack_score(individual.patch, individual.location)
+        best_location = location
+        best_score = current_loss
 
         for direction in directions:
-            candidate_location = self._move_location(individual.location, direction)
-            if candidate_location == individual.location:
+            candidate_location = self._move_location(location, direction)
+            if candidate_location == location:
                 continue
 
-            candidate_score = self._attack_score(individual.patch, candidate_location)
+            candidate_score = self._attack_score(patch, candidate_location)
             if candidate_score > best_score:
                 best_score = candidate_score
                 best_location = candidate_location
 
-        individual.location = best_location
+        return best_location
 
     def _move_location(self, location: tuple[int, int, int, int], direction: str) -> tuple[int, int, int, int]:
         x_min, _, y_min, _ = location
-        img_h, img_w = self.pop.img_shape
-        patch_size = self.pop.patch_size
 
         if direction == 'up':
             x_min -= self.stride
@@ -627,35 +657,29 @@ class LOAP:
         elif direction == 'right':
             y_min += self.stride
 
-        x_min = max(0, min(x_min, img_h - patch_size))
-        y_min = max(0, min(y_min, img_w - patch_size))
-        return (x_min, x_min + patch_size, y_min, y_min + patch_size)
+        x_min = max(0, min(x_min, self.img_h - self.patch_size))
+        y_min = max(0, min(y_min, self.img_w - self.patch_size))
+        return (x_min, x_min + self.patch_size, y_min, y_min + self.patch_size)
+
+    def _random_location(self) -> tuple[int, int, int, int]:
+        x_min = random.randint(0, self.img_h - self.patch_size)
+        y_min = random.randint(0, self.img_w - self.patch_size)
+        return (x_min, x_min + self.patch_size, y_min, y_min + self.patch_size)
 
     def _attack_score(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> float:
         with torch.no_grad():
             return self.fitness.evaluate_adv_single_with_grad(patch, location).item()
 
-    def _log_iteration(self, pool: list['Individual']) -> None:
-        _, adv_scores, psnr_scores, saliency_scores = self.fitness.benchmark(pool)
+    def _single_psnr(self, adv_img: torch.Tensor) -> float:
+        mse = torch.mean((adv_img - self.fitness.img1) ** 2)
+        psnr = torch.log10(1 / (mse + 1e-8)) / 10
+        return psnr.item()
+
+    def _log_iteration(self, adv_score: float, location: tuple[int, int, int, int]) -> None:
         self.arkive.append({
-            "adv_scores_log": adv_scores.detach().cpu(),
-            "psnr_scores_log": psnr_scores.detach().cpu(),
-            "saliency_scores_log": saliency_scores.detach().cpu(),
+            "adv_score": adv_score,
+            "location": location,
         })
-
-    def has_converged(self, population: list['Individual']) -> bool:
-        first_patch = population[0].patch
-        for individual in population[1:]:
-            if not torch.equal(first_patch, individual.patch):
-                return False
-        return True
-
-    def save_best(self, P: list['Individual']) -> None:
-        _, adv_scores, psnr_scores, _ = self.fitness.benchmark(P)
-        best_idx = torch.argmax(adv_scores)
-        best_patch = P[best_idx]
-        best_adv_img = self.fitness.apply_patch_to_image(best_patch.patch, best_patch.location)
-        return best_adv_img, adv_scores[best_idx].item(), psnr_scores[best_idx].item()
 
 
 
