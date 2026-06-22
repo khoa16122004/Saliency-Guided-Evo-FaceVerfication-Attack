@@ -145,6 +145,8 @@ if __name__ == "__main__":
         
         # save_image
         save_image(adv_img, os.path.join(output_img_dir, f"{i}.png"))
+        if hasattr(algo, "save_location_heatmap"):
+            algo.save_location_heatmap(output_dir, i)
 
         
         result = {

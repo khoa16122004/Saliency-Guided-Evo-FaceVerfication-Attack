@@ -115,6 +115,7 @@ if __name__ == '__main__':
         _, _, adv_img, adv_score, pnsr_score, full_log = algo.solve(sample_idx=i)
 
         save_image(adv_img, os.path.join(output_img_dir, f'{i}.png'))
+        algo.save_location_heatmap(output_dir, i)
 
         result = {
             'adv_score': adv_score,

@@ -52,6 +52,16 @@ class Fitness:
         sims = F.cosine_similarity(adv_features, self.img2_feature, dim=1)
         return self.attack_objective(sims).squeeze(0)
 
+    def evaluate_adv_single(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> torch.Tensor:
+        """
+        Non-differentiable (no-grad) attack objective for a single patch/location pair.
+        """
+        with torch.no_grad():
+            adv_img = self.apply_patch_to_image(patch, location).unsqueeze(0)
+            adv_features = self.model(adv_img)
+            sims = F.cosine_similarity(adv_features, self.img2_feature, dim=1)
+            return self.attack_objective(sims).squeeze(0)
+
     def _compute_saliency_map(self) -> torch.Tensor:
         guided_img = self.img1.detach().clone().unsqueeze(0).requires_grad_(True)
         similarity = F.cosine_similarity(self.model(guided_img), self.img2_feature, dim=1).mean()

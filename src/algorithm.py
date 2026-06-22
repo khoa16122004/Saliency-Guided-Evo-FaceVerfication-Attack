@@ -3,11 +3,81 @@ from fitness import Fitness
 from individual import Individual
 import torch
 import random
+import os
+import cv2
 from torchvision.utils import save_image
 from tqdm import tqdm
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 import numpy as np
 from pymoo.util.randomized_argsort import randomized_argsort
+
+
+def _init_location_grid(img_shape: tuple[int, int], grid_size: int) -> np.ndarray:
+    img_h, img_w = img_shape
+    grid_h = (img_h + grid_size - 1) // grid_size
+    grid_w = (img_w + grid_size - 1) // grid_size
+    return np.full((grid_h, grid_w), np.nan, dtype=np.float32)
+
+
+def _location_to_grid_index(location: tuple[int, int, int, int], grid_size: int, grid_shape: tuple[int, int]) -> tuple[int, int]:
+    x_min, x_max, y_min, y_max = location
+    center_x = (x_min + x_max) // 2
+    center_y = (y_min + y_max) // 2
+
+    row = center_x // grid_size
+    col = center_y // grid_size
+
+    row = max(0, min(row, grid_shape[0] - 1))
+    col = max(0, min(col, grid_shape[1] - 1))
+    return row, col
+
+
+def _update_location_grid_from_pool(
+    location_grid_best: np.ndarray,
+    pool: list['Individual'],
+    adv_scores: torch.Tensor,
+    grid_size: int,
+) -> np.ndarray:
+    adv_np = adv_scores.detach().cpu().numpy()
+    for ind, adv_score in zip(pool, adv_np):
+        row, col = _location_to_grid_index(ind.location, grid_size, location_grid_best.shape)
+        current = location_grid_best[row, col]
+        if np.isnan(current) or adv_score > current:
+            location_grid_best[row, col] = float(adv_score)
+    return location_grid_best
+
+
+def _save_location_heatmap(
+    location_grid_best: np.ndarray,
+    grid_size: int,
+    output_root: str,
+    sample_id: int,
+) -> str:
+    valid_mask = ~np.isnan(location_grid_best)
+    vis = np.zeros_like(location_grid_best, dtype=np.float32)
+
+    if valid_mask.any():
+        valid_scores = location_grid_best[valid_mask]
+        score_min = float(valid_scores.min())
+        score_max = float(valid_scores.max())
+        if score_max > score_min:
+            vis[valid_mask] = (valid_scores - score_min) / (score_max - score_min)
+        else:
+            vis[valid_mask] = 1.0
+
+    heat_u8 = np.clip(vis * 255.0, 0, 255).astype(np.uint8)
+    heat_color = cv2.applyColorMap(heat_u8, cv2.COLORMAP_JET)
+    heat_color = cv2.resize(
+        heat_color,
+        (heat_color.shape[1] * grid_size, heat_color.shape[0] * grid_size),
+        interpolation=cv2.INTER_NEAREST,
+    )
+
+    output_location_dir = os.path.join(output_root, "location")
+    os.makedirs(output_location_dir, exist_ok=True)
+    save_path = os.path.join(output_location_dir, f"elite_{sample_id}.png")
+    cv2.imwrite(save_path, heat_color)
+    return save_path
 
 class GA:
     def __init__(self, n_iter: int, 
@@ -24,6 +94,25 @@ class GA:
         self.interval_update = interval_update
         self.crossover_type = crossover_type
         self.arkive = [] 
+        self.location_grid_size = max(1, int(self.pop.patch_size))
+        self.location_grid_best = _init_location_grid(self.pop.img_shape, self.location_grid_size)
+
+    def _update_location_grid(self, pool: list['Individual'], adv_scores: torch.Tensor) -> None:
+        self.location_grid_best = _update_location_grid_from_pool(
+            self.location_grid_best,
+            pool,
+            adv_scores,
+            self.location_grid_size,
+        )
+
+    def save_location_heatmap(self, output_root: str, sample_id: int) -> str:
+        return _save_location_heatmap(
+            self.location_grid_best,
+            self.location_grid_size,
+            output_root,
+            sample_id,
+        )
+
     def solve(self):
         """
         Parallel update the location and content of individuals
@@ -233,6 +322,7 @@ class GA:
          
     def tourament_selection(self, pool: list['Individual']) -> list['Individual']:
         pool_fitness, adv_scores, psnr_scores, saliency_scores = self.fitness.benchmark(pool)
+        self._update_location_grid(pool, adv_scores)
         # self.arkive.append({'adv_scores': adv_scores.cpu(), 'psnr_scores': psnr_scores.cpu()})
         winner = []
         adv_scores_save = []
@@ -253,6 +343,7 @@ class GA:
 
     def tourament_selection_rules(self, pool: list['Individual']) -> list['Individual']:
         pool_fitness, adv_scores, psnr_scores, saliency_scores = self.fitness.benchmark(pool)
+        self._update_location_grid(pool, adv_scores)
         adv_scores_save = []
         psnr_scores_save = []
         saliency_scores_save = []
@@ -280,6 +371,7 @@ class GA:
 
     def tourament_selection_take_best(self, pool: list['Individual']) -> list['Individual']:
         pool_fitness, adv_scores, psnr_scores, _ = self.fitness.benchmark(pool)
+        self._update_location_grid(pool, adv_scores)
         winner = []
 
         current_best_success_psnr = None 
@@ -326,6 +418,25 @@ class NSGAII:
         self.interval_update = interval_update
         self.crossover_type = crossover_type
         self.arkive = []  
+        self.location_grid_size = max(1, int(self.pop.patch_size))
+        self.location_grid_best = _init_location_grid(self.pop.img_shape, self.location_grid_size)
+
+    def _update_location_grid(self, pool: list['Individual'], adv_scores: torch.Tensor) -> None:
+        self.location_grid_best = _update_location_grid_from_pool(
+            self.location_grid_best,
+            pool,
+            adv_scores,
+            self.location_grid_size,
+        )
+
+    def save_location_heatmap(self, output_root: str, sample_id: int) -> str:
+        return _save_location_heatmap(
+            self.location_grid_best,
+            self.location_grid_size,
+            output_root,
+            sample_id,
+        )
+
     def solve(self):
         """
         Parallel update the location and content of individuals
@@ -401,6 +512,7 @@ class NSGAII:
     
     def selection(self, pool: list['Individual']) -> list['Individual']:
         _, adv_scores, fsnr_scores, saliency_scores = self.fitness.benchmark(pool)
+        self._update_location_grid(pool, adv_scores)
         adv_scores_save = []
         psnr_scores_save = []
         saliency_scores_save = []
@@ -555,6 +667,22 @@ class LOAP:
         self.arkive = []
         _, self.img_h, self.img_w = self.fitness.img1.shape
         self.patch_size = self.fitness.patch_size
+        self.location_grid_size = max(1, int(self.patch_size))
+        self.location_grid_best = _init_location_grid((self.img_h, self.img_w), self.location_grid_size)
+
+    def _update_location_grid(self, location: tuple[int, int, int, int], adv_score: float) -> None:
+        row, col = _location_to_grid_index(location, self.location_grid_size, self.location_grid_best.shape)
+        current = self.location_grid_best[row, col]
+        if np.isnan(current) or adv_score > current:
+            self.location_grid_best[row, col] = float(adv_score)
+
+    def save_location_heatmap(self, output_root: str, sample_id: int) -> str:
+        return _save_location_heatmap(
+            self.location_grid_best,
+            self.location_grid_size,
+            output_root,
+            sample_id,
+        )
 
     def solve(self, sample_idx: int | None = None):
         patch = torch.rand(
@@ -568,14 +696,17 @@ class LOAP:
         best_patch = patch.clone()
         best_location = location
         best_adv = self._attack_score(best_patch, best_location)
+        self._update_location_grid(best_location, best_adv)
 
         for i in tqdm(range(self.n_iter)):
             current_loss = self._attack_score(patch, location)
+            self._update_location_grid(location, current_loss)
             patch = self._update_patch(patch, location)
             if self.optimize_location:
                 location = self.next_location(patch, location, current_loss)
 
             updated_adv = self._attack_score(patch, location)
+            self._update_location_grid(location, updated_adv)
             if updated_adv > best_adv:
                 best_adv = updated_adv
                 best_patch = patch.clone()
@@ -601,6 +732,7 @@ class LOAP:
             final_patch = patch
             final_location = location
             final_adv = self._attack_score(patch, location)
+        self._update_location_grid(final_location, final_adv)
 
         adv_img = self.fitness.apply_patch_to_image(final_patch, final_location)
         psnr_score = self._single_psnr(adv_img)
@@ -639,6 +771,7 @@ class LOAP:
                 continue
 
             candidate_score = self._attack_score(patch, candidate_location)
+            self._update_location_grid(candidate_location, candidate_score)
             if candidate_score > best_score:
                 best_score = candidate_score
                 best_location = candidate_location
