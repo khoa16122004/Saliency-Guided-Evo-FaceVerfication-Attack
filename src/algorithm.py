@@ -12,8 +12,14 @@ import numpy as np
 from pymoo.util.randomized_argsort import randomized_argsort
 
 
+def _extract_spatial_shape(img_shape) -> tuple[int, int]:
+    if len(img_shape) < 2:
+        raise ValueError(f"Invalid image shape: {img_shape}")
+    return int(img_shape[-2]), int(img_shape[-1])
+
+
 def _init_location_grid(img_shape: tuple[int, int], grid_size: int) -> np.ndarray:
-    img_h, img_w = img_shape
+    img_h, img_w = _extract_spatial_shape(img_shape)
     grid_h = (img_h + grid_size - 1) // grid_size
     grid_w = (img_w + grid_size - 1) // grid_size
     return np.full((grid_h, grid_w), np.nan, dtype=np.float32)
@@ -665,7 +671,7 @@ class LOAP:
         self.print_iter = print_iter
         self.print_every = max(1, print_every)
         self.arkive = []
-        _, self.img_h, self.img_w = self.fitness.img1.shape
+        self.img_h, self.img_w = _extract_spatial_shape(self.fitness.img1.shape)
         self.patch_size = self.fitness.patch_size
         self.location_grid_size = max(1, int(self.patch_size))
         self.location_grid_best = _init_location_grid((self.img_h, self.img_w), self.location_grid_size)
