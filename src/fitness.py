@@ -37,6 +37,21 @@ class Fitness:
         img_copy[:, x_min : x_max, y_min : y_max] = patch
         return img_copy
 
+    def attack_objective(self, sims: torch.Tensor) -> torch.Tensor:
+        """
+        Attack objective used across algorithms. Higher is better for attack success.
+        """
+        return (1 - self.label) * (0.5 - sims) + self.label * (sims - 0.5)
+
+    def evaluate_adv_single_with_grad(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> torch.Tensor:
+        """
+        Differentiable attack objective for a single patch/location pair.
+        """
+        adv_img = self.apply_patch_to_image(patch, location).unsqueeze(0)
+        adv_features = self.model(adv_img)
+        sims = F.cosine_similarity(adv_features, self.img2_feature, dim=1)
+        return self.attack_objective(sims).squeeze(0)
+
     def _compute_saliency_map(self) -> torch.Tensor:
         guided_img = self.img1.detach().clone().unsqueeze(0).requires_grad_(True)
         similarity = F.cosine_similarity(self.model(guided_img), self.img2_feature, dim=1).mean()
@@ -76,7 +91,7 @@ class Fitness:
             adv_batch = adv_imgs.to(self.device)
             adv_features = self.model(adv_batch)
             sims = F.cosine_similarity(adv_features, self.img2_feature, dim=1)
-            adv_scores = (1 - self.label) * (0.5 - sims) + self.label * (sims - 0.5)
+            adv_scores = self.attack_objective(sims)
            
            # if self.fitness_type == "adaptive":
             #    adv_scores = torch.where(adv_scores > 0, torch.tensor(0.0, device=adv_scores.device), adv_scores)
