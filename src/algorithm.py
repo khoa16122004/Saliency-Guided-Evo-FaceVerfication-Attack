@@ -66,7 +66,7 @@ def _save_location_heatmap(
             vis[valid_mask] = 1.0
 
     heat_u8 = np.clip(vis * 255.0, 0, 255).astype(np.uint8)
-    heat_color = cv2.applyColorMap(heat_u8, cv2.COLORMAP_JET)
+    heat_color = cv2.applyColorMap(heat_u8, cv2.COLORMAP_HOT)
     heat_color = cv2.resize(
         heat_color,
         (heat_color.shape[1] * grid_size, heat_color.shape[0] * grid_size),
