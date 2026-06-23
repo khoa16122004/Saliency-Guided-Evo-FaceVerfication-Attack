@@ -155,9 +155,9 @@ class GA:
                 P_final.extend(P_)
             self.pop.P = P_final
             # print(len(P_final))    
-            if self.has_converged(P):
-                print(f"Convergence reached at iteration {i+1}. Terminating early.")
-                break
+            # if self.has_converged(P):
+            #     print(f"Convergence reached at iteration {i+1}. Terminating early.")
+            #     break
             
             
         adv_img, adv_score, psnr_score= self.save_best(self.pop.P)
@@ -195,9 +195,9 @@ class GA:
                 P_final.extend(P_)
 
             self.pop.P = P_final
-            if self.has_converged(P):
-                print(f"Convergence reached at iteration {i+1}. Terminating early.")
-                break
+            # if self.has_converged(P):
+            #     print(f"Convergence reached at iteration {i+1}. Terminating early.")
+            #     break
             
             
         adv_img, adv_score, pnsr_score= self.save_best(self.pop.P)
