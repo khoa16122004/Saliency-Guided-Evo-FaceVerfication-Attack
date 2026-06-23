@@ -35,7 +35,8 @@ WEIGHT_PAIRS=(
   "0.5 0.5"
 )
 
-LOG_DIR="../output/run_logs"
+OUTPUT_DIR="../output_double"
+LOG_DIR="${OUTPUT_DIR}/run_logs"
 mkdir -p "$LOG_DIR"
 
 for model in "${MODELS[@]}"; do
@@ -57,6 +58,7 @@ for model in "${MODELS[@]}"; do
           --baseline "$baseline" \
           --fitness_type "$fitness_type" \
           --model_name "$model" \
+          --output_dir "$OUTPUT_DIR" \
           --label "$label" \
           --num_samples "$NUM_SAMPLES" \
           --n_iter "$N_ITER" \
