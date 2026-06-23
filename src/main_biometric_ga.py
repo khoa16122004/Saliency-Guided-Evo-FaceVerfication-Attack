@@ -181,7 +181,7 @@ def main():
     skipped_no_mask = 0
     saved_count = 0
 
-    for pair_idx in tqdm(range(start_idx, len(data) + args.num_samples), desc="Biometric-constrained GA"):
+    for pair_idx in tqdm(range(start_idx, start_idx + args.num_samples), desc="Biometric-constrained GA"):
         img1, img2, label = data[pair_idx]
         if label != args.label:
             continue
