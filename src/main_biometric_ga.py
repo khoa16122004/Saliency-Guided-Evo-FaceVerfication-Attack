@@ -80,12 +80,6 @@ def parse_args():
         help="Fraction of individuals initialized from img2 when init_from_img2 is enabled",
     )
     parser.add_argument(
-        "--img2_seed_blend",
-        type=float,
-        default=0.7,
-        help="Blend weight for img2 crop in initialized patch (1.0 means pure img2 crop)",
-    )
-    parser.add_argument(
         "--img2_seed_only_label1",
         action="store_true",
         help="Apply img2-based initialization only when attack label is 1",
@@ -265,7 +259,6 @@ def main():
                 and (label == 1 or not args.img2_seed_only_label1)
             ),
             img2_seed_ratio=args.img2_seed_ratio,
-            img2_seed_blend=args.img2_seed_blend,
         )
 
         algo = GA(

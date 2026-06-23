@@ -1,6 +1,7 @@
 import random
 
 import torch
+import torch.nn.functional as F
 
 
 class BiometricIndividual:
@@ -15,7 +16,6 @@ class BiometricIndividual:
         seed_patch_source=None,
         use_img2_seed_init: bool = False,
         img2_seed_ratio: float = 0.5,
-        img2_seed_blend: float = 0.7,
     ) -> None:
         self.patch_size = int(patch_size)
         self.img_shape = img_shape
@@ -26,7 +26,6 @@ class BiometricIndividual:
         self.seed_patch_source = seed_patch_source
         self.use_img2_seed_init = bool(use_img2_seed_init)
         self.img2_seed_ratio = float(max(0.0, min(1.0, img2_seed_ratio)))
-        self.img2_seed_blend = float(max(0.0, min(1.0, img2_seed_blend)))
         self.rank = None
         self.crowding = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -52,7 +51,6 @@ class BiometricIndividual:
             seed_patch_source=self.seed_patch_source,
             use_img2_seed_init=self.use_img2_seed_init,
             img2_seed_ratio=self.img2_seed_ratio,
-            img2_seed_blend=self.img2_seed_blend,
         )
 
     def _location_from_start(self, x_min: int, y_min: int) -> tuple[int, int, int, int]:
@@ -74,16 +72,14 @@ class BiometricIndividual:
         if random.random() >= self.img2_seed_ratio:
             return
 
-        x_min, x_max, y_min, y_max = self.location
-        crop = self.seed_patch_source[:, x_min:x_max, y_min:y_max].to(self.device)
-        if crop.shape[-2:] != (self.patch_size, self.patch_size):
-            return
-
-        self.patch = torch.clamp(
-            self.img2_seed_blend * crop + (1.0 - self.img2_seed_blend) * self.patch,
-            0.0,
-            1.0,
-        )
+        seed_img = self.seed_patch_source.to(self.device).unsqueeze(0)
+        resized = F.interpolate(
+            seed_img,
+            size=(self.patch_size, self.patch_size),
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(0)
+        self.patch = torch.clamp(resized, 0.0, 1.0)
 
     def mutate(self) -> None:
         if random.random() < self.prob_mutate_patch:

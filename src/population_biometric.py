@@ -14,7 +14,6 @@ class BiometricPopulation:
         seed_patch_source=None,
         use_img2_seed_init: bool = False,
         img2_seed_ratio: float = 0.5,
-        img2_seed_blend: float = 0.7,
     ) -> None:
         self.pop_size = int(pop_size)
         self.patch_size = int(patch_size)
@@ -26,7 +25,6 @@ class BiometricPopulation:
         self.seed_patch_source = seed_patch_source
         self.use_img2_seed_init = bool(use_img2_seed_init)
         self.img2_seed_ratio = float(img2_seed_ratio)
-        self.img2_seed_blend = float(img2_seed_blend)
 
         self._create_population(
             patch_size=self.patch_size,
@@ -38,7 +36,6 @@ class BiometricPopulation:
             seed_patch_source=self.seed_patch_source,
             use_img2_seed_init=self.use_img2_seed_init,
             img2_seed_ratio=self.img2_seed_ratio,
-            img2_seed_blend=self.img2_seed_blend,
         )
 
     def _create_population(
@@ -52,7 +49,6 @@ class BiometricPopulation:
         seed_patch_source,
         use_img2_seed_init: bool,
         img2_seed_ratio: float,
-        img2_seed_blend: float,
     ) -> None:
         self.P = [
             BiometricIndividual(
@@ -65,7 +61,6 @@ class BiometricPopulation:
                 seed_patch_source=seed_patch_source,
                 use_img2_seed_init=use_img2_seed_init,
                 img2_seed_ratio=img2_seed_ratio,
-                img2_seed_blend=img2_seed_blend,
             )
             for _ in range(self.pop_size)
         ]
