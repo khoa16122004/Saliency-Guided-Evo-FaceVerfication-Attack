@@ -7,7 +7,8 @@ class Population:
                  guidance: dict | None = None,
                  use_saliency_guidance: bool = False,
                  saliency_noise_scale: float = 0.15,
-                 mutate_mode: str = "single_rectangle") -> None:
+                 mutate_mode: str = "single_rectangle",
+                 target_patch_source=None) -> None:
         
         self.pop_size = pop_size
         self.patch_size = patch_size
@@ -18,6 +19,7 @@ class Population:
         self.use_saliency_guidance = use_saliency_guidance
         self.saliency_noise_scale = saliency_noise_scale
         self.mutate_mode = mutate_mode
+        self.target_patch_source = target_patch_source
         
         self._create_population(patch_size, img_shape, prob_mutate_patch, prob_mutate_location, mutate_mode=self.mutate_mode)
         
@@ -31,7 +33,8 @@ class Population:
                 guidance=self.guidance,
                 use_saliency_guidance=self.use_saliency_guidance,
                 saliency_noise_scale=self.saliency_noise_scale,
-                mutate_mode=mutate_mode
+                mutate_mode=mutate_mode,
+                target_patch_source=self.target_patch_source,
             )
             for _ in range(self.pop_size)
         ]

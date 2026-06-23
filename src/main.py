@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument('--patch_size', type=int, default=16, help="Size of the patch")
     parser.add_argument('--prob_mutate_location', type=float, default=0.2, help="Probability of mutating the patch location")
     parser.add_argument('--prob_mutate_patch', type=float, default=0.9, help="Probability of mutating the patch itself")
-    parser.add_argument('--mutate_mode', type=str, choices=['single_rectangle', 'multiple_rectangles'], default="single_rectangle", help="Mode of mutation for the patch")
+    parser.add_argument('--mutate_mode', type=str, choices=['single_rectangle', 'multiple_rectangles', 'target_rectangles'], default="single_rectangle", help="Mode of mutation for the patch")
     parser.add_argument('--n_iter', type=int, default=1000, help="Number of iterations for the genetic algorithm")
     parser.add_argument('--tourament_size', type=int, default=4, help="Tournament size for selection")
     parser.add_argument('--recons_w', type=float, default=0.5, help="Weight for reconstruction fitness")
@@ -106,7 +106,8 @@ if __name__ == "__main__":
                                 guidance=fitness.get_guidance(),
                                 use_saliency_guidance=args.use_saliency_guidance,
                                 saliency_noise_scale=args.saliency_noise_scale,
-                                mutate_mode=args.mutate_mode)
+                                mutate_mode=args.mutate_mode,
+                                target_patch_source=img2_torch)
         
        
         best_psnr_success = None

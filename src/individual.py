@@ -1,9 +1,10 @@
 import random
 import torch
+import torch.nn.functional as F
 from torchvision.utils import save_image
 
 class Individual:
-    def __init__(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, guidance: dict | None = None, use_saliency_guidance: bool = False, saliency_noise_scale: float = 0.15, mutate_mode: str = "single_rectangle") -> None:
+    def __init__(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, guidance: dict | None = None, use_saliency_guidance: bool = False, saliency_noise_scale: float = 0.15, mutate_mode: str = "single_rectangle", target_patch_source=None) -> None:
         """
         Initialize an individual with a random patch and location.
         """
@@ -14,12 +15,14 @@ class Individual:
         self.guidance = guidance or {}
         self.use_saliency_guidance = use_saliency_guidance
         self.saliency_noise_scale = saliency_noise_scale
+        self.target_patch_source = target_patch_source
         self.rank = None
         self.crowding = None
         self.device = self._resolve_device()
         
         
         self.mutate_mode = mutate_mode
+        self.target_patch_template = self._build_target_patch_template()
         self._random_location()
         self._random_patch()
         
@@ -42,8 +45,21 @@ class Individual:
             guidance=self.guidance,
             use_saliency_guidance=self.use_saliency_guidance,
             saliency_noise_scale=self.saliency_noise_scale,
-            mutate_mode=self.mutate_mode
+            mutate_mode=self.mutate_mode,
+            target_patch_source=self.target_patch_source,
         )
+
+    def _build_target_patch_template(self):
+        if self.target_patch_source is None:
+            return None
+        seed_img = self.target_patch_source.to(self.device).unsqueeze(0)
+        resized = F.interpolate(
+            seed_img,
+            size=(self.patch_size, self.patch_size),
+            mode="bilinear",
+            align_corners=False,
+        ).squeeze(0)
+        return torch.clamp(resized, 0.0, 1.0)
 
     def _location_from_start(self, x_min: int, y_min: int) -> tuple[int, int, int, int]:
         x_min = max(0, min(x_min, self.img_shape[0] - self.patch_size))
@@ -163,6 +179,17 @@ class Individual:
                 color = torch.rand(3, device=self.device)  # Random RGB color
 
                 self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
+        elif self.mutate_mode == "target_rectangles":
+            if self.target_patch_template is None:
+                return
+            num_rectangles = random.randint(1, 10)
+            for _ in range(num_rectangles):
+                x_min = random.randint(0, self.patch_size - 1)
+                y_min = random.randint(0, self.patch_size - 1)
+                width = random.randint(2, 5)
+                x_max = min(self.patch_size, x_min + width)
+                y_max = min(self.patch_size, y_min + width)
+                self.patch[:, x_min:x_max, y_min:y_max] = self.target_patch_template[:, x_min:x_max, y_min:y_max]
         
     
     
