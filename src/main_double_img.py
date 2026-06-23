@@ -108,6 +108,7 @@ def parse_args():
 
     parser.add_argument("--label", type=int, choices=[0, 1], default=1)
     parser.add_argument("--num_samples", type=int, default=100)
+    parser.add_argument("--start_idx", type=int, default=None, help="Optional start index in pairs list")
     parser.add_argument("--seed", type=int, default=22520691)
     parser.add_argument("--pair_path", type=str, default=PAIR_PATH)
     parser.add_argument("--img_dir", type=str, default=IMG_DIR)
@@ -157,14 +158,18 @@ def main():
     size = MODEL_RESIZE[args.model_name]
     mask_parts = parse_mask_parts(args.mask_parts)
 
+    start_idx = args.start_idx
+    if start_idx is None:
+        start_idx = 0 if args.label == 0 else 300
+
+    end_idx = len(data) if args.num_samples < 0 else min(len(data), start_idx + args.num_samples)
+
     processed = 0
     saved = 0
     success = 0
     skipped_no_mask = 0
 
-    for pair_idx in tqdm(range(len(data)), desc=f"Double-image attack [{args.mode}]"):
-        if processed >= args.num_samples:
-            break
+    for pair_idx in tqdm(range(start_idx, end_idx), desc=f"Double-image attack [{args.mode}]"):
 
         img1, img2, label = data[pair_idx]
         if label != args.label:
@@ -304,7 +309,7 @@ def main():
 
     success_rate = (success / saved) if saved > 0 else 0.0
     print(
-        f"Run completed. Processed={processed}, Saved={saved}, Success={success}, "
+        f"Run completed. Start={start_idx}, End={end_idx}, Processed={processed}, Saved={saved}, Success={success}, "
         f"SuccessRate={success_rate:.4f}, SkippedMask={skipped_no_mask}"
     )
     print(f"Output directory: {output_dir}")
