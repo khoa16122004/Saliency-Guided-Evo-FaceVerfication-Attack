@@ -3,6 +3,12 @@ gdown 1sGtnHX3UYkg47lktNmz8dyQ8iu1hx_Ow
 unzip lfw_preprocess.zip
 rm lfw_preprocess.zip
 
+# mask
+gdown 1rUihWMCy-6zrbWSMttgTW1LSm8b4GQ7G
+unzip mask.zip
+rm mask.zip
+
+
 # mkdiar
 mkdir src/pretrained_model
 
