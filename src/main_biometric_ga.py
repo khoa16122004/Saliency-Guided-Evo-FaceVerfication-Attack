@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument("--patch_size", type=int, default=16, help="Patch size")
     parser.add_argument("--prob_mutate_location", type=float, default=0.9, help="Probability of mutating patch location")
     parser.add_argument("--prob_mutate_patch", type=float, default=0.9, help="Probability of mutating patch content")
-    parser.add_argument("--mutate_mode", type=str, choices=["single_rectangle", "multiple_rectangles", "target_rectangles"], default="single_rectangle")
+    parser.add_argument("--mutate_mode", type=str, choices=["single_rectangle", "multiple_rectangles"], default="single_rectangle")
     parser.add_argument("--n_iter", type=int, default=1000, help="Number of GA iterations")
     parser.add_argument("--tourament_size", type=int, default=4, help="Tournament size")
     parser.add_argument("--recons_w", type=float, default=0.0, help="Weight for reconstruction objective")
@@ -56,7 +56,7 @@ def parse_args():
     parser.add_argument(
         "--min_mask_coverage",
         type=float,
-        default=1.0,
+        default=0.5,
         help="Minimum average mask coverage in a patch window for valid location (1.0 means fully inside mask)",
     )
     parser.add_argument(

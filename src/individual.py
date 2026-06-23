@@ -191,17 +191,6 @@ class Individual:
                 color = torch.rand(3, device=self.device)  # Random RGB color
 
                 self.patch[:, x_min: x_min + width, y_min: y_min + width] = color.unsqueeze(1).unsqueeze(2)
-        elif self.mutate_mode == "target_rectangles":
-            if self.target_patch_template is None:
-                return
-            num_rectangles = random.randint(1, 10)
-            for _ in range(num_rectangles):
-                x_min = random.randint(0, self.patch_size - 1)
-                y_min = random.randint(0, self.patch_size - 1)
-                width = random.randint(2, 5)
-                x_max = min(self.patch_size, x_min + width)
-                y_max = min(self.patch_size, y_min + width)
-                self.patch[:, x_min:x_max, y_min:y_max] = self.target_patch_template[:, x_min:x_max, y_min:y_max]
         
     
     

@@ -160,4 +160,89 @@ class Fitness:
 
         combined = adv_scores * self.attack_w + psnr_scores * self.recons_w
         return combined, adv_scores, psnr_scores, saliency_scores        
+
+
+class FitnessDouble:
+    """
+    Double-image fitness: apply one patch/location to both images,
+    then optimize similarity objective on (adv_img1, adv_img2).
+    """
+
+    def __init__(
+        self,
+        patch_size: int,
+        img1: torch.Tensor,
+        img2: torch.Tensor,
+        model: nn.Module,
+        label: int,
+        recons_w: float,
+        attack_w: float,
+        fitness_type: str,
+    ) -> None:
+        self.device = next(model.parameters()).device
+        self.img1 = img1.to(self.device)
+        self.img2 = img2.to(self.device)
+        self.model = model.eval()
+        self.patch_size = int(patch_size)
+        self.attack_w = float(attack_w)
+        self.recons_w = float(recons_w)
+        self.label = int(label)
+        self.fitness_type = fitness_type
+
+    def get_guidance(self):
+        return None
+
+    def attack_objective(self, sims: torch.Tensor) -> torch.Tensor:
+        return (1 - self.label) * (0.5 - sims) + self.label * (sims - 0.5)
+
+    def apply_patch(self, img: torch.Tensor, patch: torch.Tensor, location: tuple[int, int, int, int]) -> torch.Tensor:
+        img_copy = img.clone()
+        x_min, x_max, y_min, y_max = location
+        img_copy[:, x_min:x_max, y_min:y_max] = patch
+        return img_copy
+
+    def apply_patch_to_image(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> torch.Tensor:
+        # Keep GA.save_best compatibility (returns one image tensor).
+        return self.apply_patch(self.img1, patch, location)
+
+    def evaluate_adv(self, P):
+        adv1_imgs = torch.stack([self.apply_patch(self.img1, ind.patch, ind.location) for ind in P])
+        adv2_imgs = torch.stack([self.apply_patch(self.img2, ind.patch, ind.location) for ind in P])
+        with torch.no_grad():
+            feat1 = self.model(adv1_imgs)
+            feat2 = self.model(adv2_imgs)
+            sims = F.cosine_similarity(feat1, feat2, dim=1)
+            adv_scores = self.attack_objective(sims)
+        return adv_scores
+
+    def evaluate_psnr(self, P):
+        adv1_imgs = torch.stack([self.apply_patch(self.img1, ind.patch, ind.location) for ind in P])
+        adv2_imgs = torch.stack([self.apply_patch(self.img2, ind.patch, ind.location) for ind in P])
+
+        mse1 = F.mse_loss(adv1_imgs, self.img1.expand_as(adv1_imgs), reduction="none")
+        mse1 = mse1.view(mse1.size(0), -1).mean(dim=1)
+
+        mse2 = F.mse_loss(adv2_imgs, self.img2.expand_as(adv2_imgs), reduction="none")
+        mse2 = mse2.view(mse2.size(0), -1).mean(dim=1)
+
+        mse = 0.5 * (mse1 + mse2)
+        psnr_scores = torch.log10(1 / (mse + 1e-8))
+        return psnr_scores / 10
+
+    def benchmark(self, P):
+        real_adv_scores = self.evaluate_adv(P)
+        clip_adv_scores = real_adv_scores.clone()
+        real_psnr_scores = self.evaluate_psnr(P)
+        saliency_scores = torch.zeros(len(P), device=self.device)
+
+        for i in range(len(P)):
+            P[i].adv_score = real_adv_scores[i]
+            P[i].psnr_score = real_psnr_scores[i]
+            P[i].saliency_score = saliency_scores[i]
+
+        if self.fitness_type == "adaptive":
+            clip_adv_scores = torch.where(real_adv_scores > 0, torch.tensor(0.0, device=real_adv_scores.device), real_adv_scores)
+
+        combined = clip_adv_scores * self.attack_w + real_psnr_scores * self.recons_w
+        return combined, real_adv_scores, real_psnr_scores, saliency_scores
         

@@ -29,7 +29,6 @@ class BiometricIndividual:
         self.rank = None
         self.crowding = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.target_patch_template = self._build_target_patch_template()
 
         if not self.valid_locations:
             raise ValueError("valid_locations is empty. Cannot sample biometric-only locations.")
@@ -40,18 +39,6 @@ class BiometricIndividual:
         self.psnr_score = None
         self.adv_score = None
         self.saliency_score = None
-
-    def _build_target_patch_template(self):
-        if self.seed_patch_source is None:
-            return None
-        seed_img = self.seed_patch_source.to(self.device).unsqueeze(0)
-        resized = F.interpolate(
-            seed_img,
-            size=(self.patch_size, self.patch_size),
-            mode="bilinear",
-            align_corners=False,
-        ).squeeze(0)
-        return torch.clamp(resized, 0.0, 1.0)
 
     def _spawn(self) -> "BiometricIndividual":
         return BiometricIndividual(
@@ -123,17 +110,6 @@ class BiometricIndividual:
                 width = random.randint(2, 5)
                 color = torch.rand(3, device=self.device)
                 self.patch[:, x_min : x_min + width, y_min : y_min + width] = color.unsqueeze(1).unsqueeze(2)
-        elif self.mutate_mode == "target_rectangles":
-            if self.target_patch_template is None:
-                return
-            num_rectangles = random.randint(1, 10)
-            for _ in range(num_rectangles):
-                x_min = random.randint(0, self.patch_size - 1)
-                y_min = random.randint(0, self.patch_size - 1)
-                width = random.randint(2, 5)
-                x_max = min(self.patch_size, x_min + width)
-                y_max = min(self.patch_size, y_min + width)
-                self.patch[:, x_min:x_max, y_min:y_max] = self.target_patch_template[:, x_min:x_max, y_min:y_max]
 
     def crossover_UX(self, parent2: "BiometricIndividual") -> tuple["BiometricIndividual", "BiometricIndividual"]:
         offstring1_patch = self.patch.clone()
