@@ -35,7 +35,7 @@ WEIGHT_PAIRS=(
   "0.5 0.5"
 )
 
-OUTPUT_DIR="../output_double"
+OUTPUT_DIR="./output_double"
 LOG_DIR="${OUTPUT_DIR}/run_logs"
 mkdir -p "$LOG_DIR"
 
