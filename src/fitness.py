@@ -225,7 +225,7 @@ class FitnessDouble:
         mse2 = F.mse_loss(adv2_imgs, self.img2.expand_as(adv2_imgs), reduction="none")
         mse2 = mse2.view(mse2.size(0), -1).mean(dim=1)
 
-        mse = 0.5 * (mse1 + mse2)
+        mse = (mse1 + mse2)
         psnr_scores = torch.log10(1 / (mse + 1e-8))
         return psnr_scores / 10
 
