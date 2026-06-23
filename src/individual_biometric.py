@@ -12,6 +12,10 @@ class BiometricIndividual:
         prob_mutate_location: float,
         valid_locations: list[tuple[int, int]],
         mutate_mode: str = "single_rectangle",
+        seed_patch_source=None,
+        use_img2_seed_init: bool = False,
+        img2_seed_ratio: float = 0.5,
+        img2_seed_blend: float = 0.7,
     ) -> None:
         self.patch_size = int(patch_size)
         self.img_shape = img_shape
@@ -19,6 +23,10 @@ class BiometricIndividual:
         self.prob_mutate_location = float(prob_mutate_location)
         self.valid_locations = valid_locations
         self.mutate_mode = mutate_mode
+        self.seed_patch_source = seed_patch_source
+        self.use_img2_seed_init = bool(use_img2_seed_init)
+        self.img2_seed_ratio = float(max(0.0, min(1.0, img2_seed_ratio)))
+        self.img2_seed_blend = float(max(0.0, min(1.0, img2_seed_blend)))
         self.rank = None
         self.crowding = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,6 +49,10 @@ class BiometricIndividual:
             self.prob_mutate_location,
             valid_locations=self.valid_locations,
             mutate_mode=self.mutate_mode,
+            seed_patch_source=self.seed_patch_source,
+            use_img2_seed_init=self.use_img2_seed_init,
+            img2_seed_ratio=self.img2_seed_ratio,
+            img2_seed_blend=self.img2_seed_blend,
         )
 
     def _location_from_start(self, x_min: int, y_min: int) -> tuple[int, int, int, int]:
@@ -54,6 +66,24 @@ class BiometricIndividual:
 
     def _random_patch(self) -> None:
         self.patch = torch.rand(3, self.patch_size, self.patch_size, device=self.device)
+
+        if not self.use_img2_seed_init:
+            return
+        if self.seed_patch_source is None:
+            return
+        if random.random() >= self.img2_seed_ratio:
+            return
+
+        x_min, x_max, y_min, y_max = self.location
+        crop = self.seed_patch_source[:, x_min:x_max, y_min:y_max].to(self.device)
+        if crop.shape[-2:] != (self.patch_size, self.patch_size):
+            return
+
+        self.patch = torch.clamp(
+            self.img2_seed_blend * crop + (1.0 - self.img2_seed_blend) * self.patch,
+            0.0,
+            1.0,
+        )
 
     def mutate(self) -> None:
         if random.random() < self.prob_mutate_patch:
