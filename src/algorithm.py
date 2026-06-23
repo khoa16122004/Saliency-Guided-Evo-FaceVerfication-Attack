@@ -10,6 +10,7 @@ from tqdm import tqdm
 from pymoo.util.nds.non_dominated_sorting import NonDominatedSorting
 import numpy as np
 from pymoo.util.randomized_argsort import randomized_argsort
+import torch.nn.functional as nnf
 
 
 def _extract_spatial_shape(img_shape) -> tuple[int, int]:
@@ -327,32 +328,29 @@ class GA:
     
          
     def tourament_selection(self, pool: list['Individual']) -> list['Individual']:
-        pool_fitness, adv_scores, psnr_scores, saliency_scores = self.fitness.benchmark(pool)
+        pool_fitness, adv_scores, psnr_scores, _ = self.fitness.benchmark(pool)
         self._update_location_grid(pool, adv_scores)
         # self.arkive.append({'adv_scores': adv_scores.cpu(), 'psnr_scores': psnr_scores.cpu()})
         winner = []
         adv_scores_save = []
         psnr_scores_save = []
-        saliency_scores_save = []
         for i in range(0, len(pool), self.tourament_size):
 
             idx = i + torch.argmax(pool_fitness[i:i+self.tourament_size])
             best_ind = pool[idx]
             adv_scores_save.append(adv_scores[idx].cpu())
             psnr_scores_save.append(psnr_scores[idx].cpu())
-            saliency_scores_save.append(saliency_scores[idx].cpu())
     
             winner.append(best_ind)
         # print(len(winner)) 
-        self.arkive.append({"adv_scores_log": adv_scores_save, "psnr_scores_log": psnr_scores_save, "saliency_scores_log": saliency_scores_save}) 
+        self.arkive.append({"adv_scores_log": adv_scores_save, "psnr_scores_log": psnr_scores_save}) 
         return winner
 
     def tourament_selection_rules(self, pool: list['Individual']) -> list['Individual']:
-        pool_fitness, adv_scores, psnr_scores, saliency_scores = self.fitness.benchmark(pool)
+        pool_fitness, adv_scores, psnr_scores, _ = self.fitness.benchmark(pool)
         self._update_location_grid(pool, adv_scores)
         adv_scores_save = []
         psnr_scores_save = []
-        saliency_scores_save = []
 
         winners = []
         
@@ -368,9 +366,8 @@ class GA:
             winners.append(pool[best_index])
             adv_scores_save.append(adv_scores[best_index].cpu())
             psnr_scores_save.append(psnr_scores[best_index].cpu())
-            saliency_scores_save.append(saliency_scores[best_index].cpu())
 
-        self.arkive.append({"adv_scores_log": adv_scores_save, "psnr_scores_log": psnr_scores_save, "saliency_scores_log": saliency_scores_save})
+        self.arkive.append({"adv_scores_log": adv_scores_save, "psnr_scores_log": psnr_scores_save})
 
         return winners
 
@@ -517,17 +514,14 @@ class NSGAII:
     
     
     def selection(self, pool: list['Individual']) -> list['Individual']:
-        _, adv_scores, fsnr_scores, saliency_scores = self.fitness.benchmark(pool)
+        _, adv_scores, fsnr_scores, _ = self.fitness.benchmark(pool)
         self._update_location_grid(pool, adv_scores)
         adv_scores_save = []
         psnr_scores_save = []
-        saliency_scores_save = []
 
        
         # selection minimize for NSGAII
         objective_terms = [-adv_scores, -fsnr_scores]
-        if self.fitness.saliency_w > 0 or self.fitness.use_saliency_guidance:
-            objective_terms.append(-saliency_scores)
         F = np.array(torch.stack(objective_terms, dim=1).cpu().detach())
         fronts = NonDominatedSorting().do(F, n_stop_if_ranked=self.pop.pop_size)
         survivors = []
@@ -556,12 +550,11 @@ class NSGAII:
             index = list(front[I])
             adv_scores_save.append(adv_scores[index])
             psnr_scores_save.append(fsnr_scores[index])
-            saliency_scores_save.append(saliency_scores[index])
 
             # adv_scores_save.append(pool[front[I]])
             # psnr_scores_save.append(pool[front[I]])
         
-        self.arkive.append({"adv_scores_log": adv_scores_save, "psnr_scores_log": psnr_scores_save, "saliency_scores_log": saliency_scores_save}) 
+        self.arkive.append({"adv_scores_log": adv_scores_save, "psnr_scores_log": psnr_scores_save}) 
         return [pool[i] for i in survivors]
 
     
@@ -820,6 +813,402 @@ class LOAP:
             "location": location,
         })
 
+
+class PGDFullImage:
+    def __init__(self, n_iter: int,
+                 fitness: 'Fitness',
+                 epsilon: float = 0.05,
+                 alpha: float = 0.005,
+                 random_start: bool = False,
+                 signed_grad: bool = True,
+                 track_best: bool = True,
+                 print_iter: bool = False,
+                 print_every: int = 1):
+        self.n_iter = n_iter
+        self.fitness = fitness
+        self.epsilon = float(epsilon)
+        self.alpha = float(alpha)
+        self.random_start = random_start
+        self.signed_grad = signed_grad
+        self.track_best = track_best
+        self.print_iter = print_iter
+        self.print_every = max(1, int(print_every))
+        self.arkive = []
+
+        self.img_h, self.img_w = _extract_spatial_shape(self.fitness.img1.shape)
+        self.location_grid_size = max(self.img_h, self.img_w)
+        self.location_grid_best = np.full((1, 1), np.nan, dtype=np.float32)
+
+    def _update_location_grid(self, adv_score: float) -> None:
+        current = self.location_grid_best[0, 0]
+        if np.isnan(current) or adv_score > current:
+            self.location_grid_best[0, 0] = float(adv_score)
+
+    def save_location_heatmap(self, output_root: str, sample_id: int) -> str:
+        return _save_location_heatmap(
+            self.location_grid_best,
+            self.location_grid_size,
+            output_root,
+            sample_id,
+        )
+
+    def _attack_score_with_grad(self, adv_img: torch.Tensor) -> torch.Tensor:
+        adv_features = self.fitness.model(adv_img.unsqueeze(0))
+        sims = nnf.cosine_similarity(adv_features, self.fitness.img2_feature, dim=1)
+        return self.fitness.attack_objective(sims).squeeze(0)
+
+    def _attack_score(self, adv_img: torch.Tensor) -> float:
+        with torch.no_grad():
+            return self._attack_score_with_grad(adv_img).item()
+
+    def _single_psnr(self, adv_img: torch.Tensor) -> float:
+        mse = torch.mean((adv_img - self.fitness.img1) ** 2)
+        psnr = torch.log10(1 / (mse + 1e-8)) / 10
+        return psnr.item()
+
+    def _log_iteration(self, adv_score: float, linf: float) -> None:
+        self.arkive.append({
+            "adv_score": adv_score,
+            "linf": linf,
+        })
+
+    def solve(self, sample_idx: int | None = None):
+        clean_img = self.fitness.img1.detach().clone()
+
+        if self.random_start:
+            delta = torch.empty_like(clean_img).uniform_(-self.epsilon, self.epsilon)
+            adv_img = torch.clamp(clean_img + delta, 0.0, 1.0).detach()
+        else:
+            adv_img = clean_img.clone()
+
+        best_adv_img = adv_img.clone()
+        best_adv = self._attack_score(best_adv_img)
+        self._update_location_grid(best_adv)
+
+        for i in tqdm(range(self.n_iter)):
+            self.fitness.model.zero_grad(set_to_none=True)
+
+            adv_var = adv_img.detach().clone().requires_grad_(True)
+            attack_objective = self._attack_score_with_grad(adv_var)
+            attack_objective.backward()
+            grad = adv_var.grad
+
+            if grad is None:
+                break
+
+            if self.signed_grad:
+                step = self.alpha * torch.sign(grad)
+            else:
+                grad_norm = grad.abs().mean().clamp_min(1e-8)
+                step = self.alpha * grad / grad_norm
+
+            candidate_adv = adv_var + step
+            delta = torch.clamp(candidate_adv - clean_img, min=-self.epsilon, max=self.epsilon)
+            adv_img = torch.clamp(clean_img + delta, 0.0, 1.0).detach()
+
+            updated_adv = self._attack_score(adv_img)
+            self._update_location_grid(updated_adv)
+            if updated_adv > best_adv:
+                best_adv = updated_adv
+                best_adv_img = adv_img.clone()
+
+            linf = torch.max(torch.abs(adv_img - clean_img)).item()
+            if self.print_iter and ((i + 1) % self.print_every == 0 or i == 0):
+                prefix = f"[Sample {sample_idx}] " if sample_idx is not None else ""
+                print(
+                    f"{prefix}Iter {i+1}/{self.n_iter} | "
+                    f"score={updated_adv:.6f} | "
+                    f"best={best_adv:.6f} | "
+                    f"linf={linf:.6f}"
+                )
+
+            self._log_iteration(updated_adv, linf)
+
+        if self.track_best:
+            final_adv_img = best_adv_img
+            final_adv = best_adv
+        else:
+            final_adv_img = adv_img
+            final_adv = self._attack_score(final_adv_img)
+        self._update_location_grid(final_adv)
+
+        psnr_score = self._single_psnr(final_adv_img)
+        return None, None, final_adv_img, final_adv, psnr_score, self.arkive
+
+
+class LOAPAdaptiveShapeGA:
+    def __init__(self, n_iter: int,
+                 fitness: 'Fitness',
+                 epsilon: float = 0.05,
+                 stride: int = 1,
+                 optimize_location: bool = True,
+                 optimize_location_type: str = 'full',
+                 signed_grad: bool = True,
+                 track_best: bool = True,
+                 print_iter: bool = False,
+                 print_every: int = 1,
+                 shape_update_every: int = 20,
+                 shape_step: int = 2,
+                 min_patch_size: int | None = None,
+                 max_patch_size: int | None = None):
+        self.n_iter = n_iter
+        self.fitness = fitness
+        self.epsilon = epsilon
+        self.stride = stride
+        self.optimize_location = optimize_location
+        self.optimize_location_type = optimize_location_type
+        self.signed_grad = signed_grad
+        self.track_best = track_best
+        self.print_iter = print_iter
+        self.print_every = max(1, print_every)
+        self.arkive = []
+
+        self.img_h, self.img_w = _extract_spatial_shape(self.fitness.img1.shape)
+        self.base_patch_size = int(self.fitness.patch_size)
+
+        self.min_patch_size = max(2, int(min_patch_size if min_patch_size is not None else self.base_patch_size // 2))
+        self.max_patch_size = int(max_patch_size if max_patch_size is not None else int(self.base_patch_size * 1.5))
+        self.max_patch_size = min(self.max_patch_size, self.img_h, self.img_w)
+        if self.min_patch_size > self.max_patch_size:
+            self.min_patch_size = self.max_patch_size
+
+        self.shape_update_every = max(1, int(shape_update_every))
+        self.shape_step = max(1, int(shape_step))
+
+        self.location_grid_size = max(1, self.base_patch_size)
+        self.location_grid_best = _init_location_grid((self.img_h, self.img_w), self.location_grid_size)
+
+    def _update_location_grid(self, location: tuple[int, int, int, int], adv_score: float) -> None:
+        row, col = _location_to_grid_index(location, self.location_grid_size, self.location_grid_best.shape)
+        current = self.location_grid_best[row, col]
+        if np.isnan(current) or adv_score > current:
+            self.location_grid_best[row, col] = float(adv_score)
+
+    def save_location_heatmap(self, output_root: str, sample_id: int) -> str:
+        return _save_location_heatmap(
+            self.location_grid_best,
+            self.location_grid_size,
+            output_root,
+            sample_id,
+        )
+
+    def _resize_patch(self, patch: torch.Tensor, new_size: int) -> torch.Tensor:
+        if patch.shape[-1] == new_size:
+            return patch
+        resized = nnf.interpolate(
+            patch.unsqueeze(0),
+            size=(new_size, new_size),
+            mode='bilinear',
+            align_corners=False,
+        ).squeeze(0)
+        return torch.clamp(resized, 0.0, 1.0)
+
+    def _centered_resize_location(self, location: tuple[int, int, int, int], new_patch_size: int) -> tuple[int, int, int, int]:
+        x_min, x_max, y_min, y_max = location
+        center_x = (x_min + x_max) // 2
+        center_y = (y_min + y_max) // 2
+
+        new_x_min = center_x - (new_patch_size // 2)
+        new_y_min = center_y - (new_patch_size // 2)
+
+        new_x_min = max(0, min(new_x_min, self.img_h - new_patch_size))
+        new_y_min = max(0, min(new_y_min, self.img_w - new_patch_size))
+        return (new_x_min, new_x_min + new_patch_size, new_y_min, new_y_min + new_patch_size)
+
+    def _random_location_dynamic(self, patch_size: int) -> tuple[int, int, int, int]:
+        x_min = random.randint(0, self.img_h - patch_size)
+        y_min = random.randint(0, self.img_w - patch_size)
+        return (x_min, x_min + patch_size, y_min, y_min + patch_size)
+
+    def _move_location_dynamic(self, location: tuple[int, int, int, int], direction: str, patch_size: int) -> tuple[int, int, int, int]:
+        x_min, _, y_min, _ = location
+
+        if direction == 'up':
+            x_min -= self.stride
+        elif direction == 'down':
+            x_min += self.stride
+        elif direction == 'left':
+            y_min -= self.stride
+        elif direction == 'right':
+            y_min += self.stride
+
+        x_min = max(0, min(x_min, self.img_h - patch_size))
+        y_min = max(0, min(y_min, self.img_w - patch_size))
+        return (x_min, x_min + patch_size, y_min, y_min + patch_size)
+
+    def _ga_objective_score(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> float:
+        with torch.no_grad():
+            adv_score = self.fitness.evaluate_adv_single_with_grad(patch, location).item()
+            adv_img = self.fitness.apply_patch_to_image(patch, location)
+            psnr_score = self._single_psnr(adv_img)
+
+        return (
+            adv_score * float(self.fitness.attack_w)
+            + psnr_score * float(self.fitness.recons_w)
+        )
+
+    def _attack_score(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> float:
+        with torch.no_grad():
+            return self.fitness.evaluate_adv_single_with_grad(patch, location).item()
+
+    def _single_psnr(self, adv_img: torch.Tensor) -> float:
+        mse = torch.mean((adv_img - self.fitness.img1) ** 2)
+        psnr = torch.log10(1 / (mse + 1e-8)) / 10
+        return psnr.item()
+
+    def _update_patch(self, patch: torch.Tensor, location: tuple[int, int, int, int]) -> torch.Tensor:
+        self.fitness.model.zero_grad(set_to_none=True)
+        patch_var = patch.detach().clone().requires_grad_(True)
+        adv_objective = self.fitness.evaluate_adv_single_with_grad(patch_var, location)
+        adv_objective.backward()
+
+        grad = patch_var.grad
+        if grad is None:
+            return patch
+        if self.signed_grad:
+            grad = torch.sign(grad)
+
+        return torch.clamp(patch_var + self.epsilon * grad, 0.0, 1.0).detach()
+
+    def _adapt_patch_size(
+        self,
+        patch: torch.Tensor,
+        location: tuple[int, int, int, int],
+    ) -> tuple[torch.Tensor, tuple[int, int, int, int], int]:
+        current_size = patch.shape[-1]
+
+        candidate_sizes = {
+            current_size,
+            max(self.min_patch_size, current_size - self.shape_step),
+            min(self.max_patch_size, current_size + self.shape_step),
+        }
+
+        best_patch = patch
+        best_location = location
+        best_size = current_size
+        best_score = self._ga_objective_score(patch, location)
+
+        for cand_size in sorted(candidate_sizes):
+            cand_patch = self._resize_patch(patch, cand_size)
+            cand_location = self._centered_resize_location(location, cand_size)
+            cand_score = self._ga_objective_score(cand_patch, cand_location)
+            if cand_score > best_score:
+                best_patch = cand_patch
+                best_location = cand_location
+                best_size = cand_size
+                best_score = cand_score
+
+        return best_patch, best_location, best_size
+
+    def next_location(
+        self,
+        patch: torch.Tensor,
+        location: tuple[int, int, int, int],
+        current_score: float,
+    ) -> tuple[int, int, int, int]:
+        directions = ['up', 'down', 'left', 'right']
+        if self.optimize_location_type == 'random':
+            directions = [random.choice(directions)]
+
+        patch_size = patch.shape[-1]
+        best_location = location
+        best_score = current_score
+
+        for direction in directions:
+            candidate_location = self._move_location_dynamic(location, direction, patch_size)
+            if candidate_location == location:
+                continue
+
+            candidate_adv = self._attack_score(patch, candidate_location)
+            self._update_location_grid(candidate_location, candidate_adv)
+            candidate_score = self._ga_objective_score(patch, candidate_location)
+            if candidate_score > best_score:
+                best_score = candidate_score
+                best_location = candidate_location
+
+        return best_location
+
+    def _log_iteration(
+        self,
+        adv_score: float,
+        ga_score: float,
+        location: tuple[int, int, int, int],
+        patch_size: int,
+    ) -> None:
+        self.arkive.append({
+            "adv_score": adv_score,
+            "ga_score": ga_score,
+            "location": location,
+            "patch_size": patch_size,
+        })
+
+    def solve(self, sample_idx: int | None = None):
+        current_size = self.base_patch_size
+        patch = torch.rand(
+            3,
+            current_size,
+            current_size,
+            device=self.fitness.device,
+        )
+        location = self._random_location_dynamic(current_size)
+
+        best_patch = patch.clone()
+        best_location = location
+        best_adv = self._attack_score(best_patch, best_location)
+        best_ga = self._ga_objective_score(best_patch, best_location)
+        self._update_location_grid(best_location, best_adv)
+
+        for i in tqdm(range(self.n_iter)):
+            if (i + 1) % self.shape_update_every == 0:
+                patch, location, current_size = self._adapt_patch_size(patch, location)
+
+            current_ga = self._ga_objective_score(patch, location)
+            current_adv = self._attack_score(patch, location)
+            self._update_location_grid(location, current_adv)
+
+            patch = self._update_patch(patch, location)
+            if self.optimize_location:
+                location = self.next_location(patch, location, current_ga)
+
+            updated_adv = self._attack_score(patch, location)
+            updated_ga = self._ga_objective_score(patch, location)
+            self._update_location_grid(location, updated_adv)
+
+            if updated_ga > best_ga:
+                best_ga = updated_ga
+                best_adv = updated_adv
+                best_patch = patch.clone()
+                best_location = location
+
+            if self.print_iter and ((i + 1) % self.print_every == 0 or i == 0):
+                prefix = f"[Sample {sample_idx}] " if sample_idx is not None else ""
+                print(
+                    f"{prefix}Iter {i+1}/{self.n_iter} | "
+                    f"ga_before={current_ga:.6f} | "
+                    f"ga_after={updated_ga:.6f} | "
+                    f"adv_after={updated_adv:.6f} | "
+                    f"best_ga={best_ga:.6f} | "
+                    f"patch={patch.shape[-1]} | "
+                    f"loc={location}"
+                )
+
+            self._log_iteration(updated_adv, updated_ga, location, patch.shape[-1])
+
+        if self.track_best:
+            final_patch = best_patch
+            final_location = best_location
+            final_adv = best_adv
+        else:
+            final_patch = patch
+            final_location = location
+            final_adv = self._attack_score(patch, location)
+
+        self._update_location_grid(final_location, final_adv)
+        adv_img = self.fitness.apply_patch_to_image(final_patch, final_location)
+        psnr_score = self._single_psnr(adv_img)
+        return final_patch, final_location, adv_img, final_adv, psnr_score, self.arkive
+    
+    
 
 
                 

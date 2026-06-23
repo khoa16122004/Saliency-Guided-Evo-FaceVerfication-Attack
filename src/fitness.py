@@ -15,11 +15,12 @@ class Fitness:
         
         self.attack_w = attack_w
         self.recons_w = recons_w
-        self.saliency_w = saliency_w
+        # Keep signature compatibility, but disable saliency-related effects.
+        self.saliency_w = 0.0
         self.label = label
         self.fitness_type = fitness_type
-        self.use_saliency_guidance = use_saliency_guidance
-        self.enable_saliency = use_saliency_guidance or saliency_w > 0
+        self.use_saliency_guidance = False
+        self.enable_saliency = False
         self.max_psnr, self.min_psnr = None, None
         self.max_adv, self.max_adv = None, None
         with torch.no_grad():
@@ -27,9 +28,6 @@ class Fitness:
         self.saliency_map = None
         self.location_scores = None
         self.location_probs = None
-        if self.enable_saliency:
-            self.saliency_map = self._compute_saliency_map()
-            self.location_scores, self.location_probs = self._build_location_distribution()
 
     def apply_patch_to_image(self, patch: torch.Tensor, location: tuple[int, int, int, int]):
         img_copy = self.img1.clone()
@@ -79,13 +77,7 @@ class Fitness:
         return scores.detach(), probs.detach()
 
     def get_guidance(self) -> dict | None:
-        if not self.enable_saliency:
-            return None
-        return {
-            "saliency_map": self.saliency_map,
-            "location_scores": self.location_scores,
-            "location_probs": self.location_probs,
-        }
+        return None
 
     def get_location_saliency(self, location: tuple[int, int, int, int]) -> torch.Tensor:
         if self.saliency_map is None:
@@ -146,7 +138,7 @@ class Fitness:
             # return adv_scores_normalize + psnr_scores_normalize, adv_scores, psnr_scores
         if self.fitness_type == "adaptive":
             clip_adv_scores = torch.where(real_adv_scores > 0, torch.tensor(0.0, device=real_adv_scores.device), real_adv_scores)
-        combined = clip_adv_scores * self.attack_w + real_psnr_scores * self.recons_w + saliency_scores * self.saliency_w
+        combined = clip_adv_scores * self.attack_w + real_psnr_scores * self.recons_w
         return combined, real_adv_scores, real_psnr_scores, saliency_scores
     
     def benchmark_not_adaptive(self, P: list['Individual']) -> torch.Tensor:
@@ -166,6 +158,6 @@ class Fitness:
             # return adv_scores_normalize + psnr_scores_normalize, adv_scores, psnr_scores
 
 
-        combined = adv_scores * self.attack_w + psnr_scores * self.recons_w + saliency_scores * self.saliency_w
+        combined = adv_scores * self.attack_w + psnr_scores * self.recons_w
         return combined, adv_scores, psnr_scores, saliency_scores        
         

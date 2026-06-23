@@ -8,14 +8,26 @@ from torchvision import transforms
 from torchvision.utils import save_image
 
 from fitness import Fitness
-from algorithm import LOAP
+import algorithm as algo_module
 from get_architech import get_model
 from dataset import LFW
 from constant import IMG_DIR, PAIR_PATH, OUTPUT_DIR, MODEL_RESIZE
 
 
+LOAP = algo_module.LOAP
+LOAPAdaptiveShapeGA = getattr(algo_module, 'LOAPAdaptiveShapeGA', None)
+PGDFullImage = getattr(algo_module, 'PGDFullImage', None)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="LOAP attack for face verification")
+    available_algorithms = ['LOAP']
+    if LOAPAdaptiveShapeGA is not None:
+        available_algorithms.append('LOAPAdaptiveShapeGA')
+    if PGDFullImage is not None:
+        available_algorithms.append('PGDFullImage')
+
+    parser.add_argument('--algorithm', type=str, choices=available_algorithms, default='LOAP', help="Attack algorithm")
     parser.add_argument('--patch_size', type=int, default=16, help="Patch size")
     parser.add_argument('--n_iter', type=int, default=1000, help="Number of LOAP iterations")
     parser.add_argument('--recons_w', type=float, default=0.0, help="Deprecated for LOAP. Kept for compatibility.")
@@ -24,7 +36,9 @@ def parse_args():
     parser.add_argument('--use_saliency_guidance', action='store_true')
     parser.add_argument('--saliency_w', type=float, default=0.0)
 
-    parser.add_argument('--epsilon', type=float, default=0.05, help="LOAP patch update step size")
+    parser.add_argument('--epsilon', type=float, default=0.05, help="LOAP patch update step size / PGD L-inf budget")
+    parser.add_argument('--pgd_alpha', type=float, default=0.005, help="PGD step size per iteration")
+    parser.add_argument('--pgd_random_start', action='store_true', help="Enable random start within epsilon-ball for PGD")
     parser.add_argument('--stride', type=int, default=1, help="LOAP location move stride")
     parser.add_argument('--optimize_location', action='store_true', help="Enable LOAP location optimization")
     parser.add_argument('--optimize_location_type', type=str, choices=['full', 'random'], default='full')
@@ -32,6 +46,10 @@ def parse_args():
     parser.add_argument('--track_best', action='store_true', help="Return the best patch over iterations instead of final iteration")
     parser.add_argument('--print_iter', action='store_true', help="Print LOAP loss/score during optimization iterations")
     parser.add_argument('--print_every', type=int, default=1, help="Print every N iterations when --print_iter is enabled")
+    parser.add_argument('--shape_update_every', type=int, default=20, help="Patch-size adaptation interval for LOAPAdaptiveShapeGA")
+    parser.add_argument('--shape_step', type=int, default=2, help="Patch-size step for LOAPAdaptiveShapeGA")
+    parser.add_argument('--min_patch_size', type=int, default=None, help="Minimum patch size for LOAPAdaptiveShapeGA")
+    parser.add_argument('--max_patch_size', type=int, default=None, help="Maximum patch size for LOAPAdaptiveShapeGA")
 
     parser.add_argument('--label', type=int, choices=[0, 1], default=0)
     parser.add_argument('--log', type=str, default='log_LOAP')
@@ -46,18 +64,35 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
+    if args.algorithm == 'PGDFullImage':
+        run_tag = (
+            f"s{args.seed}_{args.log}_pgd"
+            f"_it{args.n_iter}_lb{args.label}"
+            f"_eps{args.epsilon}_a{args.pgd_alpha}"
+            f"_rs{int(args.pgd_random_start)}_sg{int(args.signed_grad)}"
+            f"_tb{int(args.track_best)}"
+        )
+    elif args.algorithm == 'LOAPAdaptiveShapeGA':
+        run_tag = (
+            f"s{args.seed}_{args.log}_loapA"
+            f"_it{args.n_iter}_lb{args.label}"
+            f"_ps{args.patch_size}_eps{args.epsilon}"
+            f"_st{args.stride}_loc{int(args.optimize_location)}{args.optimize_location_type[:1]}"
+            f"_sg{int(args.signed_grad)}_tb{int(args.track_best)}"
+        )
+    else:
+        run_tag = (
+            f"s{args.seed}_{args.log}_loap"
+            f"_it{args.n_iter}_lb{args.label}"
+            f"_ps{args.patch_size}_eps{args.epsilon}"
+            f"_st{args.stride}_loc{int(args.optimize_location)}{args.optimize_location_type[:1]}"
+            f"_sg{int(args.signed_grad)}_tb{int(args.track_best)}"
+        )
+
     output_dir = os.path.join(
         args.output_dir,
         args.model_name,
-        (
-            f"seed={args.seed}_{args.log}_LOAP_niter={args.n_iter}_label={args.label}"
-            f"_attackw={args.attack_w}_reconsw={args.recons_w}"
-            f"_patchsize={args.patch_size}"
-            f"_epsilon={args.epsilon}_stride={args.stride}_locopt={int(args.optimize_location)}"
-            f"_loctype={args.optimize_location_type}_signedgrad={int(args.signed_grad)}"
-            f"_trackbest={int(args.track_best)}"
-            f"_printiter={int(args.print_iter)}_printevery={args.print_every}"
-        ),
+        run_tag,
     )
     output_img_dir = os.path.join(output_dir, 'img')
     output_pickle_dir = os.path.join(output_dir, 'pickle')
@@ -99,18 +134,58 @@ if __name__ == '__main__':
             use_saliency_guidance=args.use_saliency_guidance,
         )
 
-        algo = LOAP(
-            n_iter=args.n_iter,
-            fitness=fitness,
-            epsilon=args.epsilon,
-            stride=args.stride,
-            optimize_location=args.optimize_location,
-            optimize_location_type=args.optimize_location_type,
-            signed_grad=args.signed_grad,
-            track_best=args.track_best,
-            print_iter=args.print_iter,
-            print_every=args.print_every,
-        )
+        if args.algorithm == 'PGDFullImage':
+            if PGDFullImage is None:
+                raise RuntimeError(
+                    "--algorithm PGDFullImage was requested, but class PGDFullImage "
+                    "is not defined in src/algorithm.py."
+                )
+            algo = PGDFullImage(
+                n_iter=args.n_iter,
+                fitness=fitness,
+                epsilon=args.epsilon,
+                alpha=args.pgd_alpha,
+                random_start=args.pgd_random_start,
+                signed_grad=args.signed_grad,
+                track_best=args.track_best,
+                print_iter=args.print_iter,
+                print_every=args.print_every,
+            )
+        elif args.algorithm == 'LOAPAdaptiveShapeGA':
+            if LOAPAdaptiveShapeGA is None:
+                raise RuntimeError(
+                    "--algorithm LOAPAdaptiveShapeGA was requested, but class LOAPAdaptiveShapeGA "
+                    "is not defined in src/algorithm.py. Use --algorithm LOAP or re-add that class."
+                )
+            algo = LOAPAdaptiveShapeGA(
+                n_iter=args.n_iter,
+                fitness=fitness,
+                epsilon=args.epsilon,
+                stride=args.stride,
+                optimize_location=args.optimize_location,
+                optimize_location_type=args.optimize_location_type,
+                signed_grad=args.signed_grad,
+                track_best=args.track_best,
+                print_iter=args.print_iter,
+                print_every=args.print_every,
+                shape_update_every=args.shape_update_every,
+                shape_step=args.shape_step,
+                min_patch_size=args.min_patch_size,
+                max_patch_size=args.max_patch_size,
+            )
+        else:
+            algo = LOAP(
+                n_iter=args.n_iter,
+                fitness=fitness,
+                epsilon=args.epsilon,
+                stride=args.stride,
+                optimize_location=args.optimize_location,
+                optimize_location_type=args.optimize_location_type,
+                signed_grad=args.signed_grad,
+                track_best=args.track_best,
+                print_iter=args.print_iter,
+                print_every=args.print_every,
+            )
 
         _, _, adv_img, adv_score, pnsr_score, full_log = algo.solve(sample_idx=i)
 
