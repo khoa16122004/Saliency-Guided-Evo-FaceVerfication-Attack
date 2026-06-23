@@ -36,6 +36,9 @@ def parse_args():
     parser.add_argument('--saliency_w', type=float, default=0.0, help="Weight for the saliency objective in GA")
     parser.add_argument('--saliency_noise_scale', type=float, default=0.15, help="Base noise scale for saliency-adaptive patch mutation")
     parser.add_argument('--label', type=int, choices=[0, 1], default=0) 
+    parser.add_argument('--init_from_img2', action='store_true', help='Initialize a portion of population patches from img2')
+    parser.add_argument('--img2_seed_ratio', type=float, default=0.5, help='Fraction of individuals initialized from img2 when init_from_img2 is enabled')
+    parser.add_argument('--img2_seed_only_label1', action='store_true', help='Apply img2-based initialization only when label is 1')
     parser.add_argument('--log', type=str, default="log")
     parser.add_argument('--seed', type=int, default=22520691)
     parser.add_argument('--pair_path', type=str, default=PAIR_PATH)
@@ -107,7 +110,12 @@ if __name__ == "__main__":
                                 use_saliency_guidance=args.use_saliency_guidance,
                                 saliency_noise_scale=args.saliency_noise_scale,
                                 mutate_mode=args.mutate_mode,
-                                target_patch_source=img2_torch)
+                                target_patch_source=img2_torch,
+                                use_img2_seed_init=(
+                                    args.init_from_img2
+                                    and (label == 1 or not args.img2_seed_only_label1)
+                                ),
+                                img2_seed_ratio=args.img2_seed_ratio)
         
        
         best_psnr_success = None

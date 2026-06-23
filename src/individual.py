@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torchvision.utils import save_image
 
 class Individual:
-    def __init__(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, guidance: dict | None = None, use_saliency_guidance: bool = False, saliency_noise_scale: float = 0.15, mutate_mode: str = "single_rectangle", target_patch_source=None) -> None:
+    def __init__(self, patch_size: int, img_shape: tuple[int, int], prob_mutate_patch: float, prob_mutate_location: float, guidance: dict | None = None, use_saliency_guidance: bool = False, saliency_noise_scale: float = 0.15, mutate_mode: str = "single_rectangle", target_patch_source=None, use_img2_seed_init: bool = False, img2_seed_ratio: float = 0.5) -> None:
         """
         Initialize an individual with a random patch and location.
         """
@@ -16,6 +16,8 @@ class Individual:
         self.use_saliency_guidance = use_saliency_guidance
         self.saliency_noise_scale = saliency_noise_scale
         self.target_patch_source = target_patch_source
+        self.use_img2_seed_init = bool(use_img2_seed_init)
+        self.img2_seed_ratio = float(max(0.0, min(1.0, img2_seed_ratio)))
         self.rank = None
         self.crowding = None
         self.device = self._resolve_device()
@@ -47,6 +49,8 @@ class Individual:
             saliency_noise_scale=self.saliency_noise_scale,
             mutate_mode=self.mutate_mode,
             target_patch_source=self.target_patch_source,
+            use_img2_seed_init=self.use_img2_seed_init,
+            img2_seed_ratio=self.img2_seed_ratio,
         )
 
     def _build_target_patch_template(self):
@@ -121,6 +125,14 @@ class Individual:
         Generates a random patch of shape (3, patch_size, patch_size).
         """
         self.patch = torch.rand(3, self.patch_size, self.patch_size, device=self.device)
+
+        if not self.use_img2_seed_init:
+            return
+        if self.target_patch_template is None:
+            return
+        if random.random() >= self.img2_seed_ratio:
+            return
+        self.patch = self.target_patch_template.clone()
     
     def mutate(self) -> None:
         """

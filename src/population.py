@@ -8,7 +8,9 @@ class Population:
                  use_saliency_guidance: bool = False,
                  saliency_noise_scale: float = 0.15,
                  mutate_mode: str = "single_rectangle",
-                 target_patch_source=None) -> None:
+                 target_patch_source=None,
+                 use_img2_seed_init: bool = False,
+                 img2_seed_ratio: float = 0.5) -> None:
         
         self.pop_size = pop_size
         self.patch_size = patch_size
@@ -20,6 +22,8 @@ class Population:
         self.saliency_noise_scale = saliency_noise_scale
         self.mutate_mode = mutate_mode
         self.target_patch_source = target_patch_source
+        self.use_img2_seed_init = bool(use_img2_seed_init)
+        self.img2_seed_ratio = float(img2_seed_ratio)
         
         self._create_population(patch_size, img_shape, prob_mutate_patch, prob_mutate_location, mutate_mode=self.mutate_mode)
         
@@ -35,6 +39,8 @@ class Population:
                 saliency_noise_scale=self.saliency_noise_scale,
                 mutate_mode=mutate_mode,
                 target_patch_source=self.target_patch_source,
+                use_img2_seed_init=self.use_img2_seed_init,
+                img2_seed_ratio=self.img2_seed_ratio,
             )
             for _ in range(self.pop_size)
         ]
